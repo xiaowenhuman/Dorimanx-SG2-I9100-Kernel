@@ -171,15 +171,8 @@ void omap_tiler_heap_free(struct ion_buffer *buffer)
 	tiler_unpin_block(info->tiler_handle);
 	tiler_free_block_area(info->tiler_handle);
 
-	if (info->lump) {
-		ion_carveout_free(buffer->heap, info->phys_addrs[0],
-				  info->n_phys_pages*PAGE_SIZE);
-	} else {
-		int i;
-		for (i = 0; i < info->n_phys_pages; i++)
-			ion_carveout_free(buffer->heap,
-					  info->phys_addrs[i], PAGE_SIZE);
-	}
+	for (i = 0; i < info->n_phys_pages; i++)
+		ion_carveout_free(buffer->heap, info->phys_addrs[i], PAGE_SIZE);
 
 	kfree(info);
 }
