@@ -29,7 +29,7 @@
 #include <linux/file.h>
 #include <linux/grsecurity.h>
 #include <net/genetlink.h>
-#include <asm/atomic.h>
+#include <linux/atomic.h>
 
 extern int gr_is_taskstats_denied(int pid);
 

@@ -34,8 +34,8 @@
 #include <linux/tty.h>
 #include <linux/tty_driver.h>
 #include <linux/list.h>
-#include <asm/atomic.h>
 #include <asm/local.h>
+#include <linux/atomic.h>
 
 #define GIG_VERSION {0, 5, 0, 0}
 #define GIG_COMPAT  {0, 4, 0, 0}
