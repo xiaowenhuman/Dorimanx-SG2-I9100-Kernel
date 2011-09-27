@@ -4582,13 +4582,7 @@ static const struct file_operations proc_slabstats_operations = {
 
 static int __init slab_proc_init(void)
 {
-	mode_t gr_mode = S_IRUGO;
-
-#ifdef CONFIG_GRKERNSEC_PROC_ADD
-	gr_mode = S_IRUSR;
-#endif
-
-	proc_create("slabinfo",S_IWUSR|gr_mode,NULL,&proc_slabinfo_operations);
+	proc_create("slabinfo",S_IWUSR|S_IRUSR,NULL,&proc_slabinfo_operations);
 #ifdef CONFIG_DEBUG_SLAB_LEAK
 	proc_create("slab_allocators", gr_mode, NULL, &proc_slabstats_operations);
 #endif
