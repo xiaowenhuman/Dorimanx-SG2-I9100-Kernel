@@ -1136,6 +1136,9 @@ int blk_throtl_bio(struct request_queue *q, struct bio **biop)
 		return 0;
 	}
 
+	/* bio_associate_current() needs ioc, try creating */
+	create_io_context(GFP_ATOMIC, q->node);
+
 	/*
 	 * A throtl_grp pointer retrieved under rcu can be used to access
 	 * basic fields like stats and io rates. If a group has no rules,
@@ -1211,6 +1214,7 @@ queue_bio:
 			tg->io_disp[rw], tg->iops[rw],
 			tg->nr_queued[READ], tg->nr_queued[WRITE]);
 
+	bio_associate_current(bio);
 	throtl_add_bio_tg(q->td, tg, bio);
 	*biop = NULL;
 
