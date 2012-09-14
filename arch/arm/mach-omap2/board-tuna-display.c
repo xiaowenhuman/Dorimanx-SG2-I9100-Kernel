@@ -783,14 +783,11 @@ static struct s6e8aa0_factory_calibration_info tuna_oled_factory_info_8500k = {
 		 * Rx 0.66950, Ry 0.33100
 		 * Gx 0.18800, Gy 0.74350
 		 * Bx 0.14142, By 0.04258
-		 *
-		 * These values are adjusted down by x 0.9333 to bring
-		 * maximum brightness down from 300 cd/m2 to 280.
 		 */
 		.mult = {
-			2163736680U,
-			1976041377U,
-			1614370595U,
+			2318372099U,
+			2117262806U,
+			1729744557U,
 		},
 		.rshift = 31,
 	},
@@ -835,14 +832,10 @@ static struct s6e8aa0_factory_calibration_info tuna_oled_factory_info_6500k = {
 		[1][6] = BV_255,	/* 300 cd/m2 */
 	},
 	.color_adj = {
-		/*
-		 * These values are adjusted down by x 0.9333 to bring
-		 * maximum brightness down from 300 cd/m2 to 280.
-		 */
 		.mult = {
-			2004318071U,
-			2004318071U,
-			2004318071U,
+			2318372099U,
+			2117262806U,
+			1729744557U,
 		},
 		.rshift = 31,
 	},
@@ -887,14 +880,10 @@ static struct s6e8aa0_factory_calibration_info tuna_oled_factory_info_sm2a2 = {
 		[1][6] = BV_255,	/* 300 cd/m2 */
 	},
 	.color_adj = {
-		/*
-		 * These values are adjusted down by x 0.9333 to bring
-		 * maximum brightness down from 300 cd/m2 to 280.
-		 */
 		.mult = {
-			2004318071U,
-			2004318071U,
-			2004318071U,
+			2318372099U,
+			2117262806U,
+			1729744557U,
 		},
 		.rshift = 31,
 	},
