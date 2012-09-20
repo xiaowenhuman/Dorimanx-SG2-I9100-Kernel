@@ -89,7 +89,7 @@ static int s6e8aa0_update(struct omap_dss_device *dssdev,
 static struct omap_video_timings s6e8aa0_timings = {
 	.x_res = 720,
 	.y_res = 1280,
-	.pixel_clock = 79494,
+	.pixel_clock = 80842,
 	.hfp = 158,
 	.hsw = 2,
 	.hbp = 160,
@@ -777,12 +777,12 @@ static void s6e8aa0_setup_gamma_regs(struct s6e8aa0_data *s6, u8 gamma_regs[],
 				__func__, adj, v0, v[V1], c);
 			adj = clamp_t(int, adj, adj_min, adj_max);
 		}
-#ifdef CONFIG_COLOR_GAMMA_HACK
-        int iTemp;
-        iTemp = adj + hacky_v1_offset[c] - 60;
-        if ( iTemp >= 255 )
-            iTemp = 254;
-        gamma_regs[gamma_reg_index(c, V1)] = ((iTemp > 0) && (adj <= 255)) ? iTemp : adj;
+#ifdef CONFIG_COLOR_HACK
+        int iAdjHack;
+        iAdjHack = adj + ((hacky_v1_offset[c] * (int)adj) / 100);
+        if (iAdjHack > adj_max)
+            iAdjHack = adj_max;
+        gamma_regs[gamma_reg_index(c, V1)] = iAdjHack;
 #else
 		gamma_regs[gamma_reg_index(c, V1)] = adj;
 #endif
@@ -947,19 +947,6 @@ static int s6e8aa0_update_brightness(struct omap_dss_device *dssdev)
 	s6e8aa0_update_elvss(dssdev);
 	return 0;
 }
-
-#ifdef CONFIG_COLOR_GAMMA_HACK
-void ColorGammaUpdate(void)
-{
-
-    if (lcd_->state == OMAP_DSS_DISPLAY_ACTIVE) {
-        dsi_bus_lock(lcd_);
-        s6e8aa0_update_brightness(lcd_);
-        dsi_bus_unlock(lcd_);
-    }
-
-}
-#endif
 
 static u64 s6e8aa0_voltage_lookup(struct s6e8aa0_data *s6, int c, u32 v)
 {
@@ -1155,6 +1142,30 @@ static void s6e8aa0_adjust_brightness_from_mtp(struct s6e8aa0_data *s6)
 	sort(s6->brightness_table + 1, s6->brightness_table_size - 1,
 	     sizeof(*s6->brightness_table), s6e8aa0_cmp_gamma_entry, NULL);
 }
+
+
+#ifdef CONFIG_COLOR_HACK
+void ColorGammaUpdate(void)
+{
+
+    if (lcd_->state == OMAP_DSS_DISPLAY_ACTIVE) {
+        dsi_bus_lock(lcd_);
+        s6e8aa0_update_brightness(lcd_);
+        dsi_bus_unlock(lcd_);
+    }
+
+}
+
+void brightnessUpdate(void)
+{
+    if (lcd_->state == OMAP_DSS_DISPLAY_ACTIVE) {
+        dsi_bus_lock(lcd_);
+        s6e8aa0_adjust_brightness_from_mtp(mul_copy_data);
+        s6e8aa0_update_brightness(lcd_);
+        dsi_bus_unlock(lcd_);
+    }
+}
+#endif
 
 static s16 s9_to_s16(s16 v)
 {
@@ -1577,7 +1588,71 @@ static const struct file_operations s6e8aa0_gamma_correction_fops = {
 	.release = single_release,
 };
 
-#ifdef CONFIG_COLOR_GAMMA_HACK
+#ifdef CONFIG_COLOR_HACK
+
+static ssize_t red_multiplier_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%u\n", mul_copy_data->pdata->factory_info->color_adj.mult[0]);
+}
+
+static ssize_t red_multiplier_original_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%u\n", original_color_adj_original_mults[0]);
+}
+
+static ssize_t red_multiplier_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t size)
+{
+	u32 value;
+	if (sscanf(buf, "%u", &value) == 1)
+	{
+		mul_copy_data->pdata->factory_info->color_adj.mult[0] = value;
+        brightnessUpdate();
+	}
+	return size;
+}
+
+static ssize_t green_multiplier_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%u\n", mul_copy_data->pdata->factory_info->color_adj.mult[1]);
+}
+
+static ssize_t green_multiplier_original_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%u\n", original_color_adj_original_mults[1]);
+}
+
+static ssize_t green_multiplier_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t size)
+{
+	u32 value;
+	if (sscanf(buf, "%u", &value) == 1)
+	{
+		mul_copy_data->pdata->factory_info->color_adj.mult[1] = value;
+        brightnessUpdate();
+	}
+	return size;
+}
+
+static ssize_t blue_multiplier_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%u\n", mul_copy_data->pdata->factory_info->color_adj.mult[2]);
+}
+
+static ssize_t blue_multiplier_original_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%u\n", original_color_adj_original_mults[2]);
+}
+
+static ssize_t blue_multiplier_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t size)
+{
+	u32 value;
+	if (sscanf(buf, "%u", &value) == 1)
+	{
+		mul_copy_data->pdata->factory_info->color_adj.mult[2] = value;
+        brightnessUpdate();
+	}
+	return size;
+}
+
 static ssize_t red_v1_offset_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	return sprintf(buf, "%i\n", hacky_v1_offset[0]);
@@ -1633,6 +1708,12 @@ static ssize_t samoled_color_version(struct device *dev, struct device_attribute
 static DEVICE_ATTR(red_v1_offset, S_IRUGO | S_IWUGO, red_v1_offset_show, red_v1_offset_store);
 static DEVICE_ATTR(green_v1_offset, S_IRUGO | S_IWUGO, green_v1_offset_show, green_v1_offset_store);
 static DEVICE_ATTR(blue_v1_offset, S_IRUGO | S_IWUGO, blue_v1_offset_show, blue_v1_offset_store);
+static DEVICE_ATTR(red_multiplier, S_IRUGO | S_IWUGO, red_multiplier_show, red_multiplier_store);
+static DEVICE_ATTR(red_multiplier_original, S_IRUGO, red_multiplier_original_show, NULL);
+static DEVICE_ATTR(green_multiplier, S_IRUGO | S_IWUGO, green_multiplier_show, green_multiplier_store);
+static DEVICE_ATTR(green_multiplier_original, S_IRUGO, green_multiplier_original_show, NULL);
+static DEVICE_ATTR(blue_multiplier, S_IRUGO | S_IWUGO, blue_multiplier_show, blue_multiplier_store);
+static DEVICE_ATTR(blue_multiplier_original, S_IRUGO, blue_multiplier_original_show, NULL);
 static DEVICE_ATTR(version, S_IRUGO, samoled_color_version, NULL);
 
 
@@ -1640,6 +1721,12 @@ static struct attribute *samoled_color_attributes[] = {
 	&dev_attr_red_v1_offset.attr,
 	&dev_attr_green_v1_offset.attr,
 	&dev_attr_blue_v1_offset.attr,
+	&dev_attr_red_multiplier.attr,
+	&dev_attr_red_multiplier_original.attr,
+	&dev_attr_green_multiplier.attr,
+	&dev_attr_green_multiplier_original.attr,
+	&dev_attr_blue_multiplier.attr,
+	&dev_attr_blue_multiplier_original.attr,
 	&dev_attr_version.attr,
 	NULL
 };
@@ -1742,7 +1829,7 @@ static int s6e8aa0_probe(struct omap_dss_device *dssdev)
 	if (cpu_is_omap44xx())
 		s6->force_update = true;
 
-#ifdef CONFIG_COLOR_GAMMA_HACK
+#ifdef CONFIG_COLOR_HACK
     misc_register(&samoled_color_device);
     if (sysfs_create_group(&samoled_color_device.this_device->kobj, &samoled_color_group) < 0)
     {
@@ -1750,6 +1837,10 @@ static int s6e8aa0_probe(struct omap_dss_device *dssdev)
         pr_err("Failed to create sysfs group for device (%s)!\n", samoled_color_device.name);
     }
     lcd_ = dssdev;
+    mul_copy_data = s6;
+    original_color_adj_original_mults[0] = s6->pdata->factory_info->color_adj.mult[0];
+    original_color_adj_original_mults[1] = s6->pdata->factory_info->color_adj.mult[1];
+    original_color_adj_original_mults[2] = s6->pdata->factory_info->color_adj.mult[2];
 #endif
 
 	dev_dbg(&dssdev->dev, "s6e8aa0_probe\n");
