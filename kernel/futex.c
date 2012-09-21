@@ -2280,10 +2280,10 @@ static int futex_wait_requeue_pi(u32 __user *uaddr, unsigned int flags,
 	struct futex_q q = futex_q_init;
 	int res, ret;
 
-	pax_track_stack();
-
 	if (uaddr == uaddr2)
 		return -EINVAL;
+
+	pax_track_stack();
 
 	if (!bitset)
 		return -EINVAL;
@@ -2458,6 +2458,7 @@ SYSCALL_DEFINE3(get_robust_list, int, pid,
 	struct robust_list_head __user *head;
 	unsigned long ret;
 	struct task_struct *p;
+
 #ifndef CONFIG_GRKERNSEC_PROC_MEMMAP
 	const struct cred *cred = current_cred(), *pcred;
 #endif
@@ -2474,20 +2475,6 @@ SYSCALL_DEFINE3(get_robust_list, int, pid,
 		p = find_task_by_vpid(pid);
 		if (!p)
 			goto err_unlock;
-		ret = -EPERM;
-#ifdef CONFIG_GRKERNSEC_PROC_MEMMAP
-		if (!ptrace_may_access(p, PTRACE_MODE_READ))
-			goto err_unlock;
-#else
-		pcred = __task_cred(p);
-		/* If victim is in different user_ns, then uids are not
-		   comparable, so we must have CAP_SYS_PTRACE */
-		    !ns_capable(pcred->user->user_ns, CAP_SYS_PTRACE))
-			goto err_unlock;
-ok:
-#endif
-		head = p->robust_list;
-		rcu_read_unlock();
 	}
 
 	ret = -EPERM;
