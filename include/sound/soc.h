@@ -702,7 +702,7 @@ struct snd_soc_platform_driver {
 	/* platform DAPM IO TODO: refactor this */
 	unsigned int (*read)(struct snd_soc_platform *, unsigned int);
 	int (*write)(struct snd_soc_platform *, unsigned int, unsigned int);
-};
+} __do_const;
 
 struct snd_soc_platform {
 	const char *name;
