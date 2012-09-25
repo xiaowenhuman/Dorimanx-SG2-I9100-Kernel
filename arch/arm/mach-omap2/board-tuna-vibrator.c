@@ -20,11 +20,33 @@
 #include <linux/mutex.h>
 #include <asm/mach-types.h>
 #include <plat/dmtimer.h>
+#include <linux/module.h>
+#include <linux/kernel.h>
+#include <linux/init.h>
+#include <linux/fs.h>
+#include <linux/slab.h>
 
 #include <../../../drivers/staging/android/timed_output.h>
 
 #include "mux.h"
 #include "board-tuna.h"
+
+struct vibe {
+    struct attribute attr;
+    int max_pwmduty;
+};
+
+static struct vibe vibeattr = {
+    .attr.name="pwmduty",
+    .attr.mode = 0644,
+    .max_pwmduty = 1450,
+};
+
+static struct attribute * myattr[] = {
+    &vibeattr.attr,
+    NULL
+};
+
 
 /* Vibrator enable pin is changed on Rev 05 to block not intended vibration. */
 #define GPIO_MOTOR_EN		162
@@ -53,6 +75,17 @@ static void vibrator_off(void)
 	wake_unlock(&vibdata.wklock);
 }
 
+void init_pwm_values(void) 
+{
+	omap_dm_timer_set_load(vibdata.gptimer, 1, -vibeattr.max_pwmduty);
+	omap_dm_timer_set_match(vibdata.gptimer, 1, -vibeattr.max_pwmduty+10);
+	omap_dm_timer_set_pwm(vibdata.gptimer, 0, 1,
+		OMAP_TIMER_TRIGGER_OVERFLOW_AND_COMPARE);
+	omap_dm_timer_enable(vibdata.gptimer);
+	omap_dm_timer_write_counter(vibdata.gptimer, -2);
+	omap_dm_timer_disable(vibdata.gptimer);
+}
+
 static int vibrator_get_time(struct timed_output_dev *dev)
 {
 	if (hrtimer_active(&vibdata.timer)) {
@@ -72,13 +105,8 @@ static int vibrator_timer_init(void)
 	if (ret < 0)
 		return ret;
 
-	omap_dm_timer_set_load(vibdata.gptimer, 1, -PWM_DUTY_MAX);
-	omap_dm_timer_set_match(vibdata.gptimer, 1, -PWM_DUTY_MAX+10);
-	omap_dm_timer_set_pwm(vibdata.gptimer, 0, 1,
-		OMAP_TIMER_TRIGGER_OVERFLOW_AND_COMPARE);
-	omap_dm_timer_enable(vibdata.gptimer);
-	omap_dm_timer_write_counter(vibdata.gptimer, -2);
-	omap_dm_timer_disable(vibdata.gptimer);
+	init_pwm_values();
+
 	return 0;
 }
 
@@ -195,3 +223,62 @@ static int __init omap4_tuna_vibrator_init(void)
  * initialized at device_init time
  */
 late_initcall(omap4_tuna_vibrator_init);
+
+static ssize_t default_show(struct kobject *kobj, struct attribute *attr,
+        char *buf)
+{
+    struct vibe *v = container_of(attr, struct vibe, attr);
+    return scnprintf(buf, PAGE_SIZE, "%d\n", v->max_pwmduty);
+}
+
+static ssize_t default_store(struct kobject *kobj, struct attribute *attr,
+        const char *buf, size_t len)
+{
+    struct vibe *v = container_of(attr, struct vibe, attr);
+    sscanf(buf, "%d", &v->max_pwmduty);
+    if (v->max_pwmduty > PWM_DUTY_MAX)
+      v->max_pwmduty = PWM_DUTY_MAX;
+    init_pwm_values();
+    return sizeof(int);
+}
+
+static struct sysfs_ops myops = {
+    .show = default_show,
+    .store = default_store,
+};
+
+static struct kobj_type mytype = {
+    .sysfs_ops = &myops,
+    .default_attrs = myattr,
+};
+
+struct kobject *mykobj;
+static int __init vibe_module_init(void)
+{
+    int err = -1;
+    mykobj = kzalloc(sizeof(*mykobj), GFP_KERNEL);
+    if (mykobj) {
+        kobject_init(mykobj, &mytype);
+        if (kobject_add(mykobj, NULL, "%s", "vibe")) {
+             err = -1;
+             printk("Sysfs creation failed\n");
+             kobject_put(mykobj);
+             mykobj = NULL;
+        }
+        err = 0;
+    }
+    return err;
+}
+
+static void __exit vibe_module_exit(void)
+{
+    if (mykobj) {
+        kobject_put(mykobj);
+        kfree(mykobj);
+    }
+}
+
+module_init(vibe_module_init);
+module_exit(vibe_module_exit);
+MODULE_LICENSE("GPL");
+
