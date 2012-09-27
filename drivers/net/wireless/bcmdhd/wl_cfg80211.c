@@ -4914,12 +4914,16 @@ wl_cfg80211_parse_ies(u8 *ptr, u32 len, struct parsed_ies *ies)
 		DOT11_MNG_RSN_ID)) != NULL) {
 		WL_DBG((" WPA2 IE found\n"));
 		ies->wpa2_ie_len = ies->wpa2_ie->len;
+	} else {
+		WL_ERR(("No WPA2 IE found \n"));
 	}
 
 	/* find the WPA_IE */
 	if ((ies->wpa_ie = wl_cfgp2p_find_wpaie(ptr, len)) != NULL) {
 		WL_DBG((" WPA found\n"));
 		ies->wpa_ie_len = ies->wpa_ie->length;
+	} else {
+		WL_ERR(("No WPA found \n"));
 	}
 
 	return err;
