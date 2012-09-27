@@ -245,7 +245,7 @@ CONFIG_SHELL := $(shell if [ -x "$$BASH" ]; then echo $$BASH; \
 
 HOSTCC       = gcc
 HOSTCXX      = g++
-HOSTCFLAGS   = -Wall -W -Wmissing-prototypes -Wstrict-prototypes -Wno-unused-parameter -Wno-missing-field-initializers -O2 -fomit-frame-pointer -fno-delete-null-pointer-checks
+HOSTCFLAGS   = -Wall -W -Wmissing-prototypes -Wno-sign-compare -Wstrict-prototypes -Wno-unused-parameter -Wno-missing-field-initializers -O2 -fomit-frame-pointer -fno-delete-null-pointer-checks
 HOSTCFLAGS  += $(call cc-option, -Wno-empty-body)
 HOSTCXXFLAGS = -O2 -fno-delete-null-pointer-checks
 
@@ -369,7 +369,7 @@ KBUILD_CFLAGS   := -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs \
 		   -W -Wno-unused-parameter -Wno-missing-field-initializers \
 		   -fno-strict-aliasing -fno-common \
 		   -Werror-implicit-function-declaration \
-		   -Wno-format-security \
+		   -Wno-format-security -Wno-sign-compare \
 		   -fno-delete-null-pointer-checks
 KBUILD_CFLAGS   += $(call cc-option, -Wno-empty-body)
 KBUILD_AFLAGS_KERNEL :=
