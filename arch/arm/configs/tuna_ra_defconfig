@@ -1,5 +1,5 @@
 #
-# Automatically generated make config: don't edit
+# Automatically generated file; DO NOT EDIT.
 # Linux/arm 3.0.44-rc1 Kernel Configuration
 #
 CONFIG_ARM=y
@@ -88,6 +88,7 @@ CONFIG_RESOURCE_COUNTERS=y
 # CONFIG_CGROUP_MEM_RES_CTLR is not set
 CONFIG_CGROUP_SCHED=y
 CONFIG_FAIR_GROUP_SCHED=y
+# CONFIG_CFS_BANDWIDTH is not set
 CONFIG_RT_GROUP_SCHED=y
 # CONFIG_BLK_CGROUP is not set
 # CONFIG_NAMESPACES is not set
@@ -1030,6 +1031,7 @@ CONFIG_MTD_ONENAND=y
 CONFIG_BLK_DEV=y
 # CONFIG_BLK_DEV_COW_COMMON is not set
 CONFIG_BLK_DEV_LOOP=y
+CONFIG_BLK_DEV_LOOP_MIN_COUNT=8
 # CONFIG_BLK_DEV_CRYPTOLOOP is not set
 
 #
@@ -1209,7 +1211,7 @@ CONFIG_WIFI_CONTROL_FUNC=y
 CONFIG_BCMDHD=y
 CONFIG_BCMDHD_FW_PATH="/system/vendor/firmware/fw_bcmdhd.bin"
 CONFIG_BCMDHD_NVRAM_PATH="/system/etc/wifi/bcmdhd.cal"
-# CONFIG_DHD_USE_STATIC_BUF is not set
+CONFIG_DHD_USE_STATIC_BUF=y
 CONFIG_DHD_USE_SCHED_SCAN=y
 # CONFIG_HOSTAP is not set
 # CONFIG_IWM is not set
