@@ -19,4 +19,7 @@ export CPPFLAGS="-static -Os"
 export KBUILD_BUILD_HOST=fugu
 export KBUILD_BUILD_USER=r
 
+alias gcp='git cherry-pick -x '
+alias rel='make -j20 && cd release && ./repack_bootimg.sh  4.1 && cd ..'
+
 echo "ARM environment set"
