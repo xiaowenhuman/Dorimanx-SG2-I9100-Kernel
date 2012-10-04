@@ -1185,7 +1185,8 @@ mem_cgroup_get_reclaim_stat_from_page(struct page *page)
 unsigned long mem_cgroup_isolate_pages(unsigned long nr_to_scan,
 					struct list_head *dst,
 					unsigned long *scanned, int order,
-					int mode, struct zone *z,
+					isolate_mode_t mode,
+					struct zone *z,
 					struct mem_cgroup *mem_cont,
 					int active, int file)
 {
@@ -2060,7 +2061,13 @@ static void drain_all_stock(struct mem_cgroup *root_mem, bool sync)
 
 	/* Notify other cpus that system-wide "drain" is running */
 	get_online_cpus();
-	curcpu = get_cpu();
+	/*
+	 * Get a hint for avoiding draining charges on the current cpu,
+	 * which must be exhausted by our charging.  It is not required that
+	 * this be a precise check, so we use raw_smp_processor_id() instead of
+	 * getcpu()/putcpu().
+	 */
+	curcpu = raw_smp_processor_id();
 	for_each_online_cpu(cpu) {
 		struct memcg_stock_pcp *stock = &per_cpu(memcg_stock, cpu);
 		struct mem_cgroup *mem;
@@ -2077,7 +2084,6 @@ static void drain_all_stock(struct mem_cgroup *root_mem, bool sync)
 				schedule_work_on(cpu, &stock->work);
 		}
 	}
-	put_cpu();
 
 	if (!sync)
 		goto out;
@@ -3356,6 +3362,31 @@ void mem_cgroup_end_migration(struct mem_cgroup *mem,
 }
 
 /*
+ * A call to try to shrink memory usage on charge failure at shmem's swapin.
+ * Calling hierarchical_reclaim is not enough because we should update
+ * last_oom_jiffies to prevent pagefault_out_of_memory from invoking global OOM.
+ * Moreover considering hierarchy, we should reclaim from the mem_over_limit,
+ * not from the memcg which this page would be charged to.
+ * try_charge_swapin does all of these works properly.
+ */
+int mem_cgroup_shmem_charge_fallback(struct page *page,
+			    struct mm_struct *mm,
+			    gfp_t gfp_mask)
+{
+	struct mem_cgroup *mem;
+	int ret;
+
+	if (mem_cgroup_disabled())
+		return 0;
+
+	ret = mem_cgroup_try_charge_swapin(mm, page, gfp_mask, &mem);
+	if (!ret)
+		mem_cgroup_cancel_charge_swapin(mem); /* it does !mem check */
+
+	return ret;
+}
+
+/*
  * At replace page cache, newpage is not under any memcg but it's on
  * LRU. So, this function doesn't touch res_counter but handles LRU
  * in correct way. Both pages are locked so we cannot race with uncharge.
@@ -4493,6 +4524,9 @@ static void mem_cgroup_usage_unregister_event(struct cgroup *cgrp,
 	 */
 	BUG_ON(!thresholds);
 
+	if (!thresholds->primary)
+		goto unlock;
+
 	usage = mem_cgroup_usage(memcg, type == _MEMSWAP);
 
 	/* Check if a threshold crossed before removing */
@@ -4537,11 +4571,17 @@ static void mem_cgroup_usage_unregister_event(struct cgroup *cgrp,
 swap_buffers:
 	/* Swap primary and spare array */
 	thresholds->spare = thresholds->primary;
+	/* If all events are unregistered, free the spare array */
+	if (!new) {
+		kfree(thresholds->spare);
+		thresholds->spare = NULL;
+	}
+
 	rcu_assign_pointer(thresholds->primary, new);
 
 	/* To be sure that nobody uses thresholds */
 	synchronize_rcu();
-
+unlock:
 	mutex_unlock(&memcg->thresholds_lock);
 }
 
@@ -5224,6 +5264,8 @@ static int mem_cgroup_count_precharge_pte_range(pmd_t *pmd,
 	spinlock_t *ptl;
 
 	split_huge_page_pmd(walk->mm, pmd);
+	if (pmd_trans_unstable(pmd))
+		return 0;
 
 	pte = pte_offset_map_lock(vma->vm_mm, pmd, addr, &ptl);
 	for (; addr != end; pte++, addr += PAGE_SIZE)
@@ -5385,6 +5427,8 @@ static int mem_cgroup_move_charge_pte_range(pmd_t *pmd,
 	spinlock_t *ptl;
 
 	split_huge_page_pmd(walk->mm, pmd);
+	if (pmd_trans_unstable(pmd))
+		return 0;
 retry:
 	pte = pte_offset_map_lock(vma->vm_mm, pmd, addr, &ptl);
 	for (; addr != end; addr += PAGE_SIZE) {
