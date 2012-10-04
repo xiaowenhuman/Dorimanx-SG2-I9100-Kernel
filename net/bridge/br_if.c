@@ -13,7 +13,6 @@
 
 #include <linux/kernel.h>
 #include <linux/netdevice.h>
-#include <linux/etherdevice.h>
 #include <linux/netpoll.h>
 #include <linux/ethtool.h>
 #include <linux/if_arp.h>
@@ -242,7 +241,6 @@ int br_add_bridge(struct net *net, const char *name)
 		return -ENOMEM;
 
 	dev_net_set(dev, net);
-	dev->rtnl_link_ops = &br_link_ops;
 
 	res = register_netdev(dev);
 	if (res)
@@ -327,8 +325,7 @@ int br_add_if(struct net_bridge *br, struct net_device *dev)
 
 	/* Don't allow bridging non-ethernet like devices */
 	if ((dev->flags & IFF_LOOPBACK) ||
-	    dev->type != ARPHRD_ETHER || dev->addr_len != ETH_ALEN ||
-	    !is_valid_ether_addr(dev->dev_addr))
+	    dev->type != ARPHRD_ETHER || dev->addr_len != ETH_ALEN)
 		return -EINVAL;
 
 	/* No bridging of bridges */
@@ -355,6 +352,10 @@ int br_add_if(struct net_bridge *br, struct net_device *dev)
 
 	err = kobject_init_and_add(&p->kobj, &brport_ktype, &(dev->dev.kobj),
 				   SYSFS_BRIDGE_PORT_ATTR);
+	if (err)
+		goto err0;
+
+	err = br_fdb_insert(br, p, dev->dev_addr);
 	if (err)
 		goto err1;
 
@@ -396,9 +397,6 @@ int br_add_if(struct net_bridge *br, struct net_device *dev)
 
 	dev_set_mtu(br->dev, br_min_mtu(br));
 
-	if (br_fdb_insert(br, p, dev->dev_addr))
-		netdev_err(dev, "failed insert local address bridge forwarding table\n");
-
 	kobject_uevent(&p->kobj, KOBJ_ADD);
 
 	return 0;
@@ -408,9 +406,11 @@ err4:
 err3:
 	sysfs_remove_link(br->ifobj, p->dev->name);
 err2:
+	br_fdb_delete_by_port(br, p, 1);
+err1:
 	kobject_put(&p->kobj);
 	p = NULL; /* kobject_put frees */
-err1:
+err0:
 	dev_set_promiscuity(dev, -1);
 put_back:
 	dev_put(dev);
@@ -422,6 +422,7 @@ put_back:
 int br_del_if(struct net_bridge *br, struct net_device *dev)
 {
 	struct net_bridge_port *p;
+	bool changed_addr;
 
 	p = br_port_get_rtnl(dev);
 	if (!p || p->br != br)
@@ -430,8 +431,11 @@ int br_del_if(struct net_bridge *br, struct net_device *dev)
 	del_nbp(p);
 
 	spin_lock_bh(&br->lock);
-	br_stp_recalculate_bridge_id(br);
+	changed_addr = br_stp_recalculate_bridge_id(br);
 	spin_unlock_bh(&br->lock);
+
+	if (changed_addr)
+		call_netdevice_notifiers(NETDEV_CHANGEADDR, br->dev);
 
 	netdev_update_features(br->dev);
 

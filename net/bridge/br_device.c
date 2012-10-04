@@ -38,16 +38,15 @@ netdev_tx_t br_dev_xmit(struct sk_buff *skb, struct net_device *dev)
 	}
 #endif
 
+	u64_stats_update_begin(&brstats->syncp);
+	brstats->tx_packets++;
+	brstats->tx_bytes += skb->len;
+	u64_stats_update_end(&brstats->syncp);
+
 	BR_INPUT_SKB_CB(skb)->brdev = dev;
 
 	skb_reset_mac_header(skb);
 	skb_pull(skb, ETH_HLEN);
-
-	u64_stats_update_begin(&brstats->syncp);
-	brstats->tx_packets++;
-	/* Exclude ETH_HLEN from byte stats for consistency with Rx chain */
-	brstats->tx_bytes += skb->len;
-	u64_stats_update_end(&brstats->syncp);
 
 	rcu_read_lock();
 	if (is_broadcast_ether_addr(dest))
@@ -359,8 +358,6 @@ void br_dev_setup(struct net_device *dev)
 	memcpy(br->group_addr, br_group_address, ETH_ALEN);
 
 	br->stp_enabled = BR_NO_STP;
-	br->group_fwd_mask = BR_GROUPFWD_DEFAULT;
-
 	br->designated_root = br->bridge_id;
 	br->bridge_max_age = br->max_age = 20 * HZ;
 	br->bridge_hello_time = br->hello_time = 2 * HZ;
