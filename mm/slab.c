@@ -595,6 +595,7 @@ static enum {
 	PARTIAL_AC,
 	PARTIAL_L3,
 	EARLY,
+	LATE,
 	FULL
 } g_cpucache_up;
 
@@ -671,7 +672,7 @@ static void init_node_lock_keys(int q)
 {
 	struct cache_sizes *s = malloc_sizes;
 
-	if (g_cpucache_up != FULL)
+	if (g_cpucache_up < LATE)
 		return;
 
 	for (s = malloc_sizes; s->cs_size != ULONG_MAX; s++) {
@@ -1666,6 +1667,8 @@ void __init kmem_cache_init_late(void)
 {
 	struct kmem_cache *cachep;
 
+	g_cpucache_up = LATE;
+
 	/* Annotate slab for lockdep -- annotate the malloc caches */
 	init_lock_keys();
 
@@ -1851,15 +1854,15 @@ static void dump_line(char *data, int offset, int limit)
 	unsigned char error = 0;
 	int bad_count = 0;
 
-	printk(KERN_ERR "%03x: ", offset);
+	printk(KERN_ERR "%03x:", offset);
 	for (i = 0; i < limit; i++) {
 		if (data[offset + i] != POISON_FREE) {
 			error = data[offset + i];
 			bad_count++;
 		}
+		printk(" %02x", (unsigned char)data[offset + i]);
 	}
-	print_hex_dump(KERN_CONT, "", 0, 16, 1,
-			&data[offset], limit, 1);
+	printk("\n");
 
 	if (bad_count == 1) {
 		error ^= POISON_FREE;
@@ -3039,9 +3042,14 @@ bad:
 		printk(KERN_ERR "slab: Internal list corruption detected in "
 				"cache '%s'(%d), slabp %p(%d). Hexdump:\n",
 			cachep->name, cachep->num, slabp, slabp->inuse);
-		print_hex_dump(KERN_ERR, "", DUMP_PREFIX_OFFSET, 16, 1, slabp,
-			sizeof(*slabp) + cachep->num * sizeof(kmem_bufctl_t),
-			1);
+		for (i = 0;
+		     i < sizeof(*slabp) + cachep->num * sizeof(kmem_bufctl_t);
+		     i++) {
+			if (i % 16 == 0)
+				printk("\n%03x:", i);
+			printk(" %02x", ((unsigned char *)slabp)[i]);
+		}
+		printk("\n");
 		BUG();
 	}
 }
@@ -3264,10 +3272,12 @@ static void *alternate_node_alloc(struct kmem_cache *cachep, gfp_t flags)
 	if (in_interrupt() || (flags & __GFP_THISNODE))
 		return NULL;
 	nid_alloc = nid_here = numa_mem_id();
+	get_mems_allowed();
 	if (cpuset_do_slab_mem_spread() && (cachep->flags & SLAB_MEM_SPREAD))
 		nid_alloc = cpuset_slab_spread_node();
 	else if (current->mempolicy)
 		nid_alloc = slab_node(current->mempolicy);
+	put_mems_allowed();
 	if (nid_alloc != nid_here)
 		return ____cache_alloc_node(cachep, flags, nid_alloc);
 	return NULL;
@@ -3290,16 +3300,13 @@ static void *fallback_alloc(struct kmem_cache *cache, gfp_t flags)
 	enum zone_type high_zoneidx = gfp_zone(flags);
 	void *obj = NULL;
 	int nid;
-	unsigned int cpuset_mems_cookie;
 
 	if (flags & __GFP_THISNODE)
 		return NULL;
 
-	local_flags = flags & (GFP_CONSTRAINT_MASK|GFP_RECLAIM_MASK);
-
-retry_cpuset:
-	cpuset_mems_cookie = get_mems_allowed();
+	get_mems_allowed();
 	zonelist = node_zonelist(slab_node(current->mempolicy), flags);
+	local_flags = flags & (GFP_CONSTRAINT_MASK|GFP_RECLAIM_MASK);
 
 retry:
 	/*
@@ -3353,9 +3360,7 @@ retry:
 			}
 		}
 	}
-
-	if (unlikely(!put_mems_allowed(cpuset_mems_cookie) && !obj))
-		goto retry_cpuset;
+	put_mems_allowed();
 	return obj;
 }
 
@@ -4582,7 +4587,13 @@ static const struct file_operations proc_slabstats_operations = {
 
 static int __init slab_proc_init(void)
 {
-	proc_create("slabinfo",S_IWUSR|S_IRUSR,NULL,&proc_slabinfo_operations);
+	mode_t gr_mode = S_IRUGO;
+
+#ifdef CONFIG_GRKERNSEC_PROC_ADD
+	gr_mode = S_IRUSR;
+#endif
+
+	proc_create("slabinfo",S_IWUSR|gr_mode,NULL,&proc_slabinfo_operations);
 #ifdef CONFIG_DEBUG_SLAB_LEAK
 	proc_create("slab_allocators", gr_mode, NULL, &proc_slabstats_operations);
 #endif
@@ -4600,10 +4611,12 @@ void check_object_size(const void *ptr, unsigned long n, bool to)
 	struct slab *slabp;
 	unsigned int objnr;
 	unsigned long offset;
+	const char *type;
 
 	if (!n)
 		return;
 
+	type = "<null>";
 	if (ZERO_OR_NULL_PTR(ptr))
 		goto report;
 
@@ -4612,6 +4625,7 @@ void check_object_size(const void *ptr, unsigned long n, bool to)
 
 	page = virt_to_head_page(ptr);
 
+	type = "<process stack>";
 	if (!PageSlab(page)) {
 		if (object_is_on_stack(ptr, n) == -1)
 			goto report;
@@ -4619,6 +4633,7 @@ void check_object_size(const void *ptr, unsigned long n, bool to)
 	}
 
 	cachep = page_get_cache(page);
+	type = cachep->name;
 	if (!(cachep->flags & SLAB_USERCOPY))
 		goto report;
 
@@ -4630,7 +4645,7 @@ void check_object_size(const void *ptr, unsigned long n, bool to)
 		return;
 
 report:
-	pax_report_usercopy(ptr, n, to, cachep ? cachep->name : NULL);
+	pax_report_usercopy(ptr, n, to, type);
 #endif
 
 }

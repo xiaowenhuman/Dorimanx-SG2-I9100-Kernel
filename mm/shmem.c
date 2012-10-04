@@ -74,7 +74,7 @@ struct vfsmount *shm_mnt;
 #define BOGO_DIRENT_SIZE 20
 
 /* Symlink up to this size is kmalloc'ed instead of using a swappable page */
-#define SHORT_SYMLINK_LEN 128
+#define SHORT_SYMLINK_LEN 64
 
 struct shmem_xattr {
 	struct list_head list;	/* anchored by shmem_inode_info->xattr_list */
@@ -2293,10 +2293,6 @@ static const struct inode_operations shmem_inode_operations = {
 	.listxattr	= shmem_listxattr,
 	.removexattr	= shmem_removexattr,
 #endif
-#ifdef CONFIG_TMPFS_POSIX_ACL
-	.check_acl	= generic_check_acl,
-#endif
-
 };
 
 static const struct inode_operations shmem_dir_inode_operations = {
@@ -2319,7 +2315,6 @@ static const struct inode_operations shmem_dir_inode_operations = {
 #endif
 #ifdef CONFIG_TMPFS_POSIX_ACL
 	.setattr	= shmem_setattr,
-	.check_acl	= generic_check_acl,
 #endif
 };
 
@@ -2332,7 +2327,6 @@ static const struct inode_operations shmem_special_inode_operations = {
 #endif
 #ifdef CONFIG_TMPFS_POSIX_ACL
 	.setattr	= shmem_setattr,
-	.check_acl	= generic_check_acl,
 #endif
 };
 
@@ -2550,6 +2544,7 @@ int shmem_zero_setup(struct vm_area_struct *vma)
 		return PTR_ERR(file);
 
 	shmem_set_file(vma, file);
+
 	return 0;
 }
 

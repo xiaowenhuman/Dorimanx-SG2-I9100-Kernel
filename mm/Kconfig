@@ -238,10 +238,10 @@ config KSM
 	  root has set /sys/kernel/mm/ksm/run to 1 (if CONFIG_SYSFS is set).
 
 config DEFAULT_MMAP_MIN_ADDR
-        int "Low address space to protect from user allocation"
+	int "Low address space to protect from user allocation"
 	depends on MMU
-        default 65536
-        help
+	default 65536
+	help
 	  This is the portion of low virtual memory which should be protected
 	  from userspace allocation.  Keeping a user from writing to low pages
 	  can help reduce the impact of kernel NULL pointer bugs.
@@ -356,7 +356,7 @@ config CLEANCACHE
 	  for clean pages that the kernel's pageframe replacement algorithm
 	  (PFRA) would like to keep around, but can't since there isn't enough
 	  memory.  So when the PFRA "evicts" a page, it first attempts to use
-	  cleancacne code to put the data contained in that page into
+	  cleancache code to put the data contained in that page into
 	  "transcendent memory", memory that is not directly accessible or
 	  addressable by the kernel and is of unknown and possibly
 	  time-varying size.  And when a cleancache-enabled
