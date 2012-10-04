@@ -62,7 +62,7 @@ static int ieee80211_change_iface(struct wiphy *wiphy,
 
 	if (type == NL80211_IFTYPE_AP_VLAN &&
 	    params && params->use_4addr == 0)
-		rcu_assign_pointer(sdata->u.vlan.sta, NULL);
+		RCU_INIT_POINTER(sdata->u.vlan.sta, NULL);
 	else if (type == NL80211_IFTYPE_STATION &&
 		 params && params->use_4addr >= 0)
 		sdata->u.mgd.use_4addr = params->use_4addr;
@@ -209,7 +209,6 @@ static int ieee80211_get_key(struct wiphy *wiphy, struct net_device *dev,
 	u8 seq[6] = {0};
 	struct key_params params;
 	struct ieee80211_key *key = NULL;
-	u64 pn64;
 	u32 iv32;
 	u16 iv16;
 	int err = -ENOENT;
@@ -257,24 +256,22 @@ static int ieee80211_get_key(struct wiphy *wiphy, struct net_device *dev,
 		params.seq_len = 6;
 		break;
 	case WLAN_CIPHER_SUITE_CCMP:
-		pn64 = atomic64_read(&key->u.ccmp.tx_pn);
-		seq[0] = pn64;
-		seq[1] = pn64 >> 8;
-		seq[2] = pn64 >> 16;
-		seq[3] = pn64 >> 24;
-		seq[4] = pn64 >> 32;
-		seq[5] = pn64 >> 40;
+		seq[0] = key->u.ccmp.tx_pn[5];
+		seq[1] = key->u.ccmp.tx_pn[4];
+		seq[2] = key->u.ccmp.tx_pn[3];
+		seq[3] = key->u.ccmp.tx_pn[2];
+		seq[4] = key->u.ccmp.tx_pn[1];
+		seq[5] = key->u.ccmp.tx_pn[0];
 		params.seq = seq;
 		params.seq_len = 6;
 		break;
 	case WLAN_CIPHER_SUITE_AES_CMAC:
-		pn64 = atomic64_read(&key->u.aes_cmac.tx_pn);
-		seq[0] = pn64;
-		seq[1] = pn64 >> 8;
-		seq[2] = pn64 >> 16;
-		seq[3] = pn64 >> 24;
-		seq[4] = pn64 >> 32;
-		seq[5] = pn64 >> 40;
+		seq[0] = key->u.aes_cmac.tx_pn[5];
+		seq[1] = key->u.aes_cmac.tx_pn[4];
+		seq[2] = key->u.aes_cmac.tx_pn[3];
+		seq[3] = key->u.aes_cmac.tx_pn[2];
+		seq[4] = key->u.aes_cmac.tx_pn[1];
+		seq[5] = key->u.aes_cmac.tx_pn[0];
 		params.seq = seq;
 		params.seq_len = 6;
 		break;
@@ -542,7 +539,7 @@ static int ieee80211_config_beacon(struct ieee80211_sub_if_data *sdata,
 
 	sdata->vif.bss_conf.dtim_period = new->dtim_period;
 
-	rcu_assign_pointer(sdata->u.ap.beacon, new);
+	RCU_INIT_POINTER(sdata->u.ap.beacon, new);
 
 	synchronize_rcu();
 
@@ -594,7 +591,7 @@ static int ieee80211_del_beacon(struct wiphy *wiphy, struct net_device *dev)
 	if (!old)
 		return -ENOENT;
 
-	rcu_assign_pointer(sdata->u.ap.beacon, NULL);
+	RCU_INIT_POINTER(sdata->u.ap.beacon, NULL);
 	synchronize_rcu();
 	kfree(old);
 
@@ -677,11 +674,8 @@ static void sta_apply_parameters(struct ieee80211_local *local,
 
 	if (mask & BIT(NL80211_STA_FLAG_WME)) {
 		sta->flags &= ~WLAN_STA_WME;
-		sta->sta.wme = false;
-		if (set & BIT(NL80211_STA_FLAG_WME)) {
+		if (set & BIT(NL80211_STA_FLAG_WME))
 			sta->flags |= WLAN_STA_WME;
-			sta->sta.wme = true;
-		}
 	}
 
 	if (mask & BIT(NL80211_STA_FLAG_MFP)) {
@@ -857,7 +851,7 @@ static int ieee80211_change_station(struct wiphy *wiphy,
 				return -EBUSY;
 			}
 
-			rcu_assign_pointer(vlansdata->u.vlan.sta, sta);
+			RCU_INIT_POINTER(vlansdata->u.vlan.sta, sta);
 		}
 
 		sta->sdata = vlansdata;
@@ -1255,10 +1249,6 @@ static int ieee80211_set_txq_params(struct wiphy *wiphy,
 	 */
 	p.uapsd = false;
 
-	if (params->queue >= local->hw.queues)
-		return -EINVAL;
-
-	local->tx_conf[params->queue] = p;
 	if (drv_conf_tx(local, params->queue, &p)) {
 		wiphy_debug(local->hw.wiphy,
 			    "failed to set TX queue parameters for queue %d\n",
@@ -1563,19 +1553,6 @@ static int ieee80211_testmode_cmd(struct wiphy *wiphy, void *data, int len)
 		return -EOPNOTSUPP;
 
 	return local->ops->testmode_cmd(&local->hw, data, len);
-}
-
-static int ieee80211_testmode_dump(struct wiphy *wiphy,
-				   struct sk_buff *skb,
-				   struct netlink_callback *cb,
-				   void *data, int len)
-{
-	struct ieee80211_local *local = wiphy_priv(wiphy);
-
-	if (!local->ops->testmode_dump)
-		return -EOPNOTSUPP;
-
-	return local->ops->testmode_dump(&local->hw, skb, cb, data, len);
 }
 #endif
 
@@ -1898,33 +1875,6 @@ static int ieee80211_mgmt_tx(struct wiphy *wiphy, struct net_device *dev,
 
 	*cookie = (unsigned long) skb;
 
-	if (is_offchan && local->ops->offchannel_tx) {
-		int ret;
-
-		IEEE80211_SKB_CB(skb)->band = chan->band;
-
-		mutex_lock(&local->mtx);
-
-		if (local->hw_offchan_tx_cookie) {
-			mutex_unlock(&local->mtx);
-			return -EBUSY;
-		}
-
-		/* TODO: bitrate control, TX processing? */
-		ret = drv_offchannel_tx(local, skb, chan, channel_type, wait);
-
-		if (ret == 0)
-			local->hw_offchan_tx_cookie = *cookie;
-		mutex_unlock(&local->mtx);
-
-		/*
-		 * Allow driver to return 1 to indicate it wants to have the
-		 * frame transmitted with a remain_on_channel + regular TX.
-		 */
-		if (ret != 1)
-			return ret;
-	}
-
 	if (is_offchan && local->ops->remain_on_channel) {
 		unsigned int duration;
 		int ret;
@@ -2011,18 +1961,6 @@ static int ieee80211_mgmt_tx_cancel_wait(struct wiphy *wiphy,
 
 	mutex_lock(&local->mtx);
 
-	if (local->ops->offchannel_tx_cancel_wait &&
-	    local->hw_offchan_tx_cookie == cookie) {
-		ret = drv_offchannel_tx_cancel_wait(local);
-
-		if (!ret)
-			local->hw_offchan_tx_cookie = 0;
-
-		mutex_unlock(&local->mtx);
-
-		return ret;
-	}
-
 	if (local->ops->cancel_remain_on_channel) {
 		cookie ^= 2;
 		ret = ieee80211_cancel_remain_on_channel_hw(local, cookie);
@@ -2108,21 +2046,6 @@ static void ieee80211_get_ringparam(struct wiphy *wiphy,
 	drv_get_ringparam(local, tx, tx_max, rx, rx_max);
 }
 
-static int ieee80211_set_rekey_data(struct wiphy *wiphy,
-				    struct net_device *dev,
-				    struct cfg80211_gtk_rekey_data *data)
-{
-	struct ieee80211_local *local = wiphy_priv(wiphy);
-	struct ieee80211_sub_if_data *sdata = IEEE80211_DEV_TO_SUB_IF(dev);
-
-	if (!local->ops->set_rekey_data)
-		return -EOPNOTSUPP;
-
-	drv_set_rekey_data(local, sdata, data);
-
-	return 0;
-}
-
 struct cfg80211_ops mac80211_config_ops = {
 	.add_virtual_intf = ieee80211_add_iface,
 	.del_virtual_intf = ieee80211_del_iface,
@@ -2172,7 +2095,6 @@ struct cfg80211_ops mac80211_config_ops = {
 	.set_wds_peer = ieee80211_set_wds_peer,
 	.rfkill_poll = ieee80211_rfkill_poll,
 	CFG80211_TESTMODE_CMD(ieee80211_testmode_cmd)
-	CFG80211_TESTMODE_DUMP(ieee80211_testmode_dump)
 	.set_power_mgmt = ieee80211_set_power_mgmt,
 	.set_bitrate_mask = ieee80211_set_bitrate_mask,
 	.remain_on_channel = ieee80211_remain_on_channel,
@@ -2185,5 +2107,4 @@ struct cfg80211_ops mac80211_config_ops = {
 	.get_antenna = ieee80211_get_antenna,
 	.set_ringparam = ieee80211_set_ringparam,
 	.get_ringparam = ieee80211_get_ringparam,
-	.set_rekey_data = ieee80211_set_rekey_data,
 };

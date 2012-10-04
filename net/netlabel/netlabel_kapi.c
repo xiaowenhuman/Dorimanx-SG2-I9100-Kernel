@@ -5,7 +5,7 @@
  * system manages static and dynamic label mappings for network protocols such
  * as CIPSO and RIPSO.
  *
- * Author: Paul Moore <paul@paul-moore.com>
+ * Author: Paul Moore <paul.moore@hp.com>
  *
  */
 
@@ -341,11 +341,11 @@ int netlbl_cfg_cipsov4_map_add(u32 doi,
 
 	entry = kzalloc(sizeof(*entry), GFP_ATOMIC);
 	if (entry == NULL)
-		goto out_entry;
+		return -ENOMEM;
 	if (domain != NULL) {
 		entry->domain = kstrdup(domain, GFP_ATOMIC);
 		if (entry->domain == NULL)
-			goto out_domain;
+			goto cfg_cipsov4_map_add_failure;
 	}
 
 	if (addr == NULL && mask == NULL) {
@@ -354,13 +354,13 @@ int netlbl_cfg_cipsov4_map_add(u32 doi,
 	} else if (addr != NULL && mask != NULL) {
 		addrmap = kzalloc(sizeof(*addrmap), GFP_ATOMIC);
 		if (addrmap == NULL)
-			goto out_addrmap;
+			goto cfg_cipsov4_map_add_failure;
 		INIT_LIST_HEAD(&addrmap->list4);
 		INIT_LIST_HEAD(&addrmap->list6);
 
 		addrinfo = kzalloc(sizeof(*addrinfo), GFP_ATOMIC);
 		if (addrinfo == NULL)
-			goto out_addrinfo;
+			goto cfg_cipsov4_map_add_failure;
 		addrinfo->type_def.cipsov4 = doi_def;
 		addrinfo->type = NETLBL_NLTYPE_CIPSOV4;
 		addrinfo->list.addr = addr->s_addr & mask->s_addr;
@@ -374,7 +374,7 @@ int netlbl_cfg_cipsov4_map_add(u32 doi,
 		entry->type = NETLBL_NLTYPE_ADDRSELECT;
 	} else {
 		ret_val = -EINVAL;
-		goto out_addrmap;
+		goto cfg_cipsov4_map_add_failure;
 	}
 
 	ret_val = netlbl_domhsh_add(entry, audit_info);
@@ -384,15 +384,11 @@ int netlbl_cfg_cipsov4_map_add(u32 doi,
 	return 0;
 
 cfg_cipsov4_map_add_failure:
-	kfree(addrinfo);
-out_addrinfo:
-	kfree(addrmap);
-out_addrmap:
-	kfree(entry->domain);
-out_domain:
-	kfree(entry);
-out_entry:
 	cipso_v4_doi_putdef(doi_def);
+	kfree(entry->domain);
+	kfree(entry);
+	kfree(addrmap);
+	kfree(addrinfo);
 	return ret_val;
 }
 

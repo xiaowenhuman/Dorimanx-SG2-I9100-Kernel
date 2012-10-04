@@ -61,8 +61,10 @@ void tipc_msg_init(struct tipc_msg *m, u32 user, u32 type,
 	msg_set_size(m, hsize);
 	msg_set_prevnode(m, tipc_own_addr);
 	msg_set_type(m, type);
-	msg_set_orignode(m, tipc_own_addr);
-	msg_set_destnode(m, destnode);
+	if (!msg_short(m)) {
+		msg_set_orignode(m, tipc_own_addr);
+		msg_set_destnode(m, destnode);
+	}
 }
 
 /**

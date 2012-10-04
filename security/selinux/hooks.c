@@ -14,7 +14,7 @@
  *  Copyright (C) 2004-2005 Trusted Computer Solutions, Inc.
  *			    <dgoeddel@trustedcs.com>
  *  Copyright (C) 2006, 2007, 2009 Hewlett-Packard Development Company, L.P.
- *	Paul Moore <paul@paul-moore.com>
+ *	Paul Moore <paul.moore@hp.com>
  *  Copyright (C) 2007 Hitachi Software Engineering Co., Ltd.
  *		       Yuichi Nakamura <ynakam@hitachisoft.jp>
  *
@@ -2052,7 +2052,7 @@ static int selinux_bprm_set_creds(struct linux_binprm *bprm)
 			u32 ptsid = 0;
 
 			rcu_read_lock();
-			tracer = ptrace_parent(current);
+			tracer = tracehook_tracer_task(current);
 			if (likely(tracer != NULL)) {
 				sec = __task_cred(tracer)->security;
 				ptsid = sec->sid;
@@ -2658,13 +2658,12 @@ static int selinux_inode_follow_link(struct dentry *dentry, struct nameidata *na
 	return dentry_has_perm(cred, dentry, FILE__READ);
 }
 
-static int selinux_inode_permission(struct inode *inode, int mask)
+static int selinux_inode_permission(struct inode *inode, int mask, unsigned flags)
 {
 	const struct cred *cred = current_cred();
 	struct common_audit_data ad;
 	u32 perms;
 	bool from_access;
-	unsigned flags = mask & MAY_NOT_BLOCK;
 
 	from_access = mask & MAY_ACCESS;
 	mask &= (MAY_READ|MAY_WRITE|MAY_EXEC|MAY_APPEND);
@@ -5319,7 +5318,7 @@ static int selinux_setprocattr(struct task_struct *p,
 		   Otherwise, leave SID unchanged and fail. */
 		ptsid = 0;
 		task_lock(p);
-		tracer = ptrace_parent(p);
+		tracer = tracehook_tracer_task(p);
 		if (tracer)
 			ptsid = task_sid(tracer);
 		task_unlock(p);

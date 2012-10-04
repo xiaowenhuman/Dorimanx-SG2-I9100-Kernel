@@ -369,7 +369,7 @@ static void irda_getvalue_confirm(int result, __u16 obj_id,
 {
 	struct irda_sock *self;
 
-	self = priv;
+	self = (struct irda_sock *) priv;
 	if (!self) {
 		IRDA_WARNING("%s: lost myself!\n", __func__);
 		return;
@@ -418,7 +418,7 @@ static void irda_selective_discovery_indication(discinfo_t *discovery,
 
 	IRDA_DEBUG(2, "%s()\n", __func__);
 
-	self = priv;
+	self = (struct irda_sock *) priv;
 	if (!self) {
 		IRDA_WARNING("%s: lost myself!\n", __func__);
 		return;

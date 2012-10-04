@@ -48,6 +48,8 @@ static void ieee80211_free_tid_rx(struct rcu_head *h)
 		container_of(h, struct tid_ampdu_rx, rcu_head);
 	int i;
 
+	del_timer_sync(&tid_rx->reorder_timer);
+
 	for (i = 0; i < tid_rx->buf_size; i++)
 		dev_kfree_skb(tid_rx->reorder_buf[i]);
 	kfree(tid_rx->reorder_buf);
@@ -69,7 +71,7 @@ void ___ieee80211_stop_rx_ba_session(struct sta_info *sta, u16 tid,
 	if (!tid_rx)
 		return;
 
-	rcu_assign_pointer(sta->ampdu_mlme.tid_rx[tid], NULL);
+	RCU_INIT_POINTER(sta->ampdu_mlme.tid_rx[tid], NULL);
 
 #ifdef CONFIG_MAC80211_HT_DEBUG
 	printk(KERN_DEBUG "Rx BA session stop requested for %pM tid %u\n",
@@ -87,7 +89,6 @@ void ___ieee80211_stop_rx_ba_session(struct sta_info *sta, u16 tid,
 				     tid, 0, reason);
 
 	del_timer_sync(&tid_rx->session_timer);
-	del_timer_sync(&tid_rx->reorder_timer);
 
 	call_rcu(&tid_rx->rcu_head, ieee80211_free_tid_rx);
 }
@@ -99,29 +100,6 @@ void __ieee80211_stop_rx_ba_session(struct sta_info *sta, u16 tid,
 	___ieee80211_stop_rx_ba_session(sta, tid, initiator, reason, tx);
 	mutex_unlock(&sta->ampdu_mlme.mtx);
 }
-
-void ieee80211_stop_rx_ba_session(struct ieee80211_vif *vif, u16 ba_rx_bitmap,
-				  const u8 *addr)
-{
-	struct ieee80211_sub_if_data *sdata = vif_to_sdata(vif);
-	struct sta_info *sta;
-	int i;
-
-	rcu_read_lock();
-	sta = sta_info_get(sdata, addr);
-	if (!sta) {
-		rcu_read_unlock();
-		return;
-	}
-
-	for (i = 0; i < STA_TID_NUM; i++)
-		if (ba_rx_bitmap & BIT(i))
-			set_bit(i, sta->ampdu_mlme.tid_rx_stop_requested);
-
-	ieee80211_queue_work(&sta->local->hw, &sta->ampdu_mlme.work);
-	rcu_read_unlock();
-}
-EXPORT_SYMBOL(ieee80211_stop_rx_ba_session);
 
 /*
  * After accepting the AddBA Request we activated a timer,
@@ -270,11 +248,7 @@ void ieee80211_process_addba_request(struct ieee80211_local *local,
 				"%pM on tid %u\n",
 				mgmt->sa, tid);
 #endif /* CONFIG_MAC80211_HT_DEBUG */
-
-		/* delete existing Rx BA session on the same tid */
-		___ieee80211_stop_rx_ba_session(sta, tid, WLAN_BACK_RECIPIENT,
-						WLAN_STATUS_UNSPECIFIED_QOS,
-						false);
+		goto end;
 	}
 
 	/* prepare A-MPDU MLME for Rx aggregation */
@@ -340,7 +314,7 @@ void ieee80211_process_addba_request(struct ieee80211_local *local,
 	status = WLAN_STATUS_SUCCESS;
 
 	/* activate it for RX */
-	rcu_assign_pointer(sta->ampdu_mlme.tid_rx[tid], tid_agg_rx);
+	RCU_INIT_POINTER(sta->ampdu_mlme.tid_rx[tid], tid_agg_rx);
 
 	if (timeout)
 		mod_timer(&tid_agg_rx->session_timer, TU_TO_EXP_TIME(timeout));

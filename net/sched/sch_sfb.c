@@ -93,8 +93,7 @@ struct sfb_skb_cb {
 
 static inline struct sfb_skb_cb *sfb_skb_cb(const struct sk_buff *skb)
 {
-	BUILD_BUG_ON(sizeof(skb->cb) <
-		sizeof(struct qdisc_skb_cb) + sizeof(struct sfb_skb_cb));
+	qdisc_cb_private_validate(skb, sizeof(struct sfb_skb_cb));
 	return (struct sfb_skb_cb *)qdisc_skb_cb(skb)->data;
 }
 
@@ -287,6 +286,12 @@ static int sfb_enqueue(struct sk_buff *skb, struct Qdisc *sch)
 	u32 r, slot, salt, sfbhash;
 	int ret = NET_XMIT_SUCCESS | __NET_XMIT_BYPASS;
 
+	if (unlikely(sch->q.qlen >= q->limit)) {
+		sch->qstats.overlimits++;
+		q->stats.queuedrop++;
+		goto drop;
+	}
+
 	if (q->rehash_interval > 0) {
 		unsigned long limit = q->rehash_time + q->rehash_interval;
 
@@ -332,12 +337,9 @@ static int sfb_enqueue(struct sk_buff *skb, struct Qdisc *sch)
 	slot ^= 1;
 	sfb_skb_cb(skb)->hashes[slot] = 0;
 
-	if (unlikely(minqlen >= q->max || sch->q.qlen >= q->limit)) {
+	if (unlikely(minqlen >= q->max)) {
 		sch->qstats.overlimits++;
-		if (minqlen >= q->max)
-			q->stats.bucketdrop++;
-		else
-			q->stats.queuedrop++;
+		q->stats.bucketdrop++;
 		goto drop;
 	}
 
@@ -557,6 +559,8 @@ static int sfb_dump(struct Qdisc *sch, struct sk_buff *skb)
 
 	sch->qstats.backlog = q->qdisc->qstats.backlog;
 	opts = nla_nest_start(skb, TCA_OPTIONS);
+	if (opts == NULL)
+		goto nla_put_failure;
 	NLA_PUT(skb, TCA_SFB_PARMS, sizeof(opt), &opt);
 	return nla_nest_end(skb, opts);
 

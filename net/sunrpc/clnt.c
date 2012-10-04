@@ -64,9 +64,9 @@ static void	call_decode(struct rpc_task *task);
 static void	call_bind(struct rpc_task *task);
 static void	call_bind_status(struct rpc_task *task);
 static void	call_transmit(struct rpc_task *task);
-#if defined(CONFIG_SUNRPC_BACKCHANNEL)
+#if defined(CONFIG_NFS_V4_1)
 static void	call_bc_transmit(struct rpc_task *task);
-#endif /* CONFIG_SUNRPC_BACKCHANNEL */
+#endif /* CONFIG_NFS_V4_1 */
 static void	call_status(struct rpc_task *task);
 static void	call_transmit_status(struct rpc_task *task);
 static void	call_refresh(struct rpc_task *task);
@@ -97,7 +97,8 @@ static int
 rpc_setup_pipedir(struct rpc_clnt *clnt, char *dir_name)
 {
 	static uint32_t clntid;
-	struct path path, dir;
+	struct nameidata nd;
+	struct path path;
 	char name[15];
 	struct qstr q = {
 		.name = name,
@@ -112,7 +113,7 @@ rpc_setup_pipedir(struct rpc_clnt *clnt, char *dir_name)
 	path.mnt = rpc_get_mount();
 	if (IS_ERR(path.mnt))
 		return PTR_ERR(path.mnt);
-	error = vfs_path_lookup(path.mnt->mnt_root, path.mnt, dir_name, 0, &dir);
+	error = vfs_path_lookup(path.mnt->mnt_root, path.mnt, dir_name, 0, &nd);
 	if (error)
 		goto err;
 
@@ -120,7 +121,7 @@ rpc_setup_pipedir(struct rpc_clnt *clnt, char *dir_name)
 		q.len = snprintf(name, sizeof(name), "clnt%x", (unsigned int)clntid++);
 		name[sizeof(name) - 1] = '\0';
 		q.hash = full_name_hash(q.name, q.len);
-		path.dentry = rpc_create_client_dir(dir.dentry, &q, clnt);
+		path.dentry = rpc_create_client_dir(nd.path.dentry, &q, clnt);
 		if (!IS_ERR(path.dentry))
 			break;
 		error = PTR_ERR(path.dentry);
@@ -131,11 +132,11 @@ rpc_setup_pipedir(struct rpc_clnt *clnt, char *dir_name)
 			goto err_path_put;
 		}
 	}
-	path_put(&dir);
+	path_put(&nd.path);
 	clnt->cl_path = path;
 	return 0;
 err_path_put:
-	path_put(&dir);
+	path_put(&nd.path);
 err:
 	rpc_put_mount();
 	return error;
@@ -715,7 +716,7 @@ rpc_call_async(struct rpc_clnt *clnt, const struct rpc_message *msg, int flags,
 }
 EXPORT_SYMBOL_GPL(rpc_call_async);
 
-#if defined(CONFIG_SUNRPC_BACKCHANNEL)
+#if defined(CONFIG_NFS_V4_1)
 /**
  * rpc_run_bc_task - Allocate a new RPC task for backchannel use, then run
  * rpc_execute against it
@@ -758,7 +759,7 @@ out:
 	dprintk("RPC: rpc_run_bc_task: task= %p\n", task);
 	return task;
 }
-#endif /* CONFIG_SUNRPC_BACKCHANNEL */
+#endif /* CONFIG_NFS_V4_1 */
 
 void
 rpc_call_start(struct rpc_task *task)
@@ -1361,7 +1362,7 @@ call_transmit_status(struct rpc_task *task)
 	}
 }
 
-#if defined(CONFIG_SUNRPC_BACKCHANNEL)
+#if defined(CONFIG_NFS_V4_1)
 /*
  * 5b.	Send the backchannel RPC reply.  On error, drop the reply.  In
  * addition, disconnect on connectivity errors.
@@ -1425,7 +1426,7 @@ call_bc_transmit(struct rpc_task *task)
 	}
 	rpc_wake_up_queued_task(&req->rq_xprt->pending, task);
 }
-#endif /* CONFIG_SUNRPC_BACKCHANNEL */
+#endif /* CONFIG_NFS_V4_1 */
 
 /*
  * 6.	Sort out the RPC call status
@@ -1550,7 +1551,8 @@ call_decode(struct rpc_task *task)
 	kxdrdproc_t	decode = task->tk_msg.rpc_proc->p_decode;
 	__be32		*p;
 
-	dprint_status(task);
+	dprintk("RPC: %5u call_decode (status %d)\n",
+			task->tk_pid, task->tk_status);
 
 	if (task->tk_flags & RPC_CALL_MAJORSEEN) {
 		if (clnt->cl_chatty)
@@ -1664,18 +1666,19 @@ rpc_verify_header(struct rpc_task *task)
 		if (--len < 0)
 			goto out_overflow;
 		switch ((n = ntohl(*p++))) {
-		case RPC_AUTH_ERROR:
-			break;
-		case RPC_MISMATCH:
-			dprintk("RPC: %5u %s: RPC call version mismatch!\n",
-				task->tk_pid, __func__);
-			error = -EPROTONOSUPPORT;
-			goto out_err;
-		default:
-			dprintk("RPC: %5u %s: RPC call rejected, "
-				"unknown error: %x\n",
-				task->tk_pid, __func__, n);
-			goto out_eio;
+			case RPC_AUTH_ERROR:
+				break;
+			case RPC_MISMATCH:
+				dprintk("RPC: %5u %s: RPC call version "
+						"mismatch!\n",
+						task->tk_pid, __func__);
+				error = -EPROTONOSUPPORT;
+				goto out_err;
+			default:
+				dprintk("RPC: %5u %s: RPC call rejected, "
+						"unknown error: %x\n",
+						task->tk_pid, __func__, n);
+				goto out_eio;
 		}
 		if (--len < 0)
 			goto out_overflow;

@@ -2,7 +2,7 @@
  *
  *	Added conditional policy language extensions
  *
- *  Updated: Hewlett-Packard <paul@paul-moore.com>
+ *  Updated: Hewlett-Packard <paul.moore@hp.com>
  *
  *	Added support for the policy capability bitmap
  *
@@ -1241,6 +1241,7 @@ static int sel_make_bools(void)
 		kfree(bool_pending_names[i]);
 	kfree(bool_pending_names);
 	kfree(bool_pending_values);
+	bool_num = 0;
 	bool_pending_names = NULL;
 	bool_pending_values = NULL;
 
@@ -1984,7 +1985,6 @@ __initcall(init_sel_fs);
 void exit_sel_fs(void)
 {
 	kobject_put(selinuxfs_kobj);
-	kern_unmount(selinuxfs_mount);
 	unregister_filesystem(&sel_fs_type);
 }
 #endif

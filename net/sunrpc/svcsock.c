@@ -51,8 +51,6 @@
 #include <linux/sunrpc/stats.h>
 #include <linux/sunrpc/xprt.h>
 
-#include "sunrpc.h"
-
 #define RPCDBG_FACILITY	RPCDBG_SVCXPRT
 
 
@@ -68,12 +66,12 @@ static void		svc_sock_free(struct svc_xprt *);
 static struct svc_xprt *svc_create_socket(struct svc_serv *, int,
 					  struct net *, struct sockaddr *,
 					  int, int);
-#if defined(CONFIG_SUNRPC_BACKCHANNEL)
+#if defined(CONFIG_NFS_V4_1)
 static struct svc_xprt *svc_bc_create_socket(struct svc_serv *, int,
 					     struct net *, struct sockaddr *,
 					     int, int);
 static void svc_bc_sock_free(struct svc_xprt *xprt);
-#endif /* CONFIG_SUNRPC_BACKCHANNEL */
+#endif /* CONFIG_NFS_V4_1 */
 
 #ifdef CONFIG_DEBUG_LOCK_ALLOC
 static struct lock_class_key svc_key[2];
@@ -1124,9 +1122,9 @@ static int svc_tcp_recvfrom(struct svc_rqst *rqstp)
 	if (len >= 0)
 		svsk->sk_tcplen += len;
 	if (len != want) {
+		svc_tcp_save_pages(svsk, rqstp);
 		if (len < 0 && len != -EAGAIN)
 			goto err_other;
-		svc_tcp_save_pages(svsk, rqstp);
 		dprintk("svc: incomplete TCP record (%d of %d)\n",
 			svsk->sk_tcplen, svsk->sk_reclen);
 		goto err_noclose;
@@ -1243,7 +1241,7 @@ static struct svc_xprt *svc_tcp_create(struct svc_serv *serv,
 	return svc_create_socket(serv, IPPROTO_TCP, net, sa, salen, flags);
 }
 
-#if defined(CONFIG_SUNRPC_BACKCHANNEL)
+#if defined(CONFIG_NFS_V4_1)
 static struct svc_xprt *svc_bc_create_socket(struct svc_serv *, int,
 					     struct net *, struct sockaddr *,
 					     int, int);
@@ -1284,7 +1282,7 @@ static void svc_cleanup_bc_xprt_sock(void)
 {
 	svc_unreg_xprt_class(&svc_tcp_bc_class);
 }
-#else /* CONFIG_SUNRPC_BACKCHANNEL */
+#else /* CONFIG_NFS_V4_1 */
 static void svc_init_bc_xprt_sock(void)
 {
 }
@@ -1292,7 +1290,7 @@ static void svc_init_bc_xprt_sock(void)
 static void svc_cleanup_bc_xprt_sock(void)
 {
 }
-#endif /* CONFIG_SUNRPC_BACKCHANNEL */
+#endif /* CONFIG_NFS_V4_1 */
 
 static struct svc_xprt_ops svc_tcp_ops = {
 	.xpo_create = svc_tcp_create,
@@ -1623,7 +1621,7 @@ static void svc_sock_free(struct svc_xprt *xprt)
 	kfree(svsk);
 }
 
-#if defined(CONFIG_SUNRPC_BACKCHANNEL)
+#if defined(CONFIG_NFS_V4_1)
 /*
  * Create a back channel svc_xprt which shares the fore channel socket.
  */
@@ -1662,4 +1660,4 @@ static void svc_bc_sock_free(struct svc_xprt *xprt)
 	if (xprt)
 		kfree(container_of(xprt, struct svc_sock, sk_xprt));
 }
-#endif /* CONFIG_SUNRPC_BACKCHANNEL */
+#endif /* CONFIG_NFS_V4_1 */

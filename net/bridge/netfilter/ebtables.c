@@ -1198,8 +1198,7 @@ ebt_register_table(struct net *net, const struct ebt_table *input_table)
 
 	if (table->check && table->check(newinfo, table->valid_hooks)) {
 		BUGPRINT("The table doesn't like its own initial data, lol\n");
-		ret = -EINVAL;
-		goto free_chainstack;
+		return ERR_PTR(-EINVAL);
 	}
 
 	table->private = newinfo;

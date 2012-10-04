@@ -608,6 +608,7 @@ struct ieee80211_hw *ieee80211_alloc_hw(size_t priv_data_len,
 	local->hw.max_rates = 1;
 	local->hw.max_report_rates = 0;
 	local->hw.max_rx_aggregation_subframes = IEEE80211_MAX_AMPDU_BUF;
+	local->hw.max_tx_aggregation_subframes = IEEE80211_MAX_AMPDU_BUF;
 	local->hw.conf.long_frame_max_tx_count = wiphy->retry_long;
 	local->hw.conf.short_frame_max_tx_count = wiphy->retry_short;
 	local->user_power_level = -1;
@@ -741,12 +742,6 @@ int ieee80211_register_hw(struct ieee80211_hw *hw)
 				      sizeof(void *) * channels, GFP_KERNEL);
 	if (!local->int_scan_req)
 		return -ENOMEM;
-
-	for (band = 0; band < IEEE80211_NUM_BANDS; band++) {
-		if (!local->hw.wiphy->bands[band])
-			continue;
-		local->int_scan_req->rates[band] = (u32) -1;
-	}
 
 	/* if low-level driver supports AP, we also support VLAN */
 	if (local->hw.wiphy->interface_modes & BIT(NL80211_IFTYPE_AP)) {
@@ -916,6 +911,8 @@ int ieee80211_register_hw(struct ieee80211_hw *hw)
 		wiphy_debug(local->hw.wiphy, "Failed to initialize wep: %d\n",
 			    result);
 
+	ieee80211_led_init(local);
+
 	rtnl_lock();
 
 	result = ieee80211_init_rate_ctrl_alg(local,
@@ -936,8 +933,6 @@ int ieee80211_register_hw(struct ieee80211_hw *hw)
 	}
 
 	rtnl_unlock();
-
-	ieee80211_led_init(local);
 
 	local->network_latency_notifier.notifier_call =
 		ieee80211_max_network_latency;

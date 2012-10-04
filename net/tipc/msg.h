@@ -68,10 +68,10 @@
  * Message header sizes
  */
 
-#define SHORT_H_SIZE              24	/* In-cluster basic payload message */
-#define BASIC_H_SIZE              32	/* Basic payload message */
-#define NAMED_H_SIZE              40	/* Named payload message */
-#define MCAST_H_SIZE              44	/* Multicast payload message */
+#define SHORT_H_SIZE              24	/* Connected, in-cluster messages */
+#define DIR_MSG_H_SIZE            32	/* Directly addressed messages */
+#define LONG_H_SIZE               40	/* Named messages */
+#define MCAST_H_SIZE              44	/* Multicast messages */
 #define INT_H_SIZE                40	/* Internal messages */
 #define MIN_H_SIZE                24	/* Smallest legal TIPC header size */
 #define MAX_H_SIZE                60	/* Largest possible TIPC header size */
@@ -311,6 +311,26 @@ static inline void msg_set_seqno(struct tipc_msg *m, u32 n)
 }
 
 /*
+ * TIPC may utilize the "link ack #" and "link seq #" fields of a short
+ * message header to hold the destination node for the message, since the
+ * normal "dest node" field isn't present.  This cache is only referenced
+ * when required, so populating the cache of a longer message header is
+ * harmless (as long as the header has the two link sequence fields present).
+ *
+ * Note: Host byte order is OK here, since the info never goes off-card.
+ */
+
+static inline u32 msg_destnode_cache(struct tipc_msg *m)
+{
+	return m->hdr[2];
+}
+
+static inline void msg_set_destnode_cache(struct tipc_msg *m, u32 dnode)
+{
+	m->hdr[2] = dnode;
+}
+
+/*
  * Words 3-10
  */
 
@@ -357,7 +377,7 @@ static inline void msg_set_mc_netid(struct tipc_msg *m, u32 p)
 
 static inline int msg_short(struct tipc_msg *m)
 {
-	return msg_hdr_sz(m) == SHORT_H_SIZE;
+	return msg_hdr_sz(m) == 24;
 }
 
 static inline u32 msg_orignode(struct tipc_msg *m)
@@ -615,7 +635,7 @@ static inline u32 msg_link_selector(struct tipc_msg *m)
 
 static inline void msg_set_link_selector(struct tipc_msg *m, u32 n)
 {
-	msg_set_bits(m, 4, 0, 1, n);
+	msg_set_bits(m, 4, 0, 1, (n & 1));
 }
 
 /*
@@ -639,7 +659,7 @@ static inline u32 msg_probe(struct tipc_msg *m)
 
 static inline void msg_set_probe(struct tipc_msg *m, u32 val)
 {
-	msg_set_bits(m, 5, 0, 1, val);
+	msg_set_bits(m, 5, 0, 1, (val & 1));
 }
 
 static inline char msg_net_plane(struct tipc_msg *m)

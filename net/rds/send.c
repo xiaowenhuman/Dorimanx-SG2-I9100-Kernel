@@ -35,7 +35,6 @@
 #include <net/sock.h>
 #include <linux/in.h>
 #include <linux/list.h>
-#include <linux/ratelimit.h>
 
 #include "rds.h"
 
@@ -933,7 +932,6 @@ int rds_sendmsg(struct kiocb *iocb, struct socket *sock, struct msghdr *msg,
 	/* Mirror Linux UDP mirror of BSD error message compatibility */
 	/* XXX: Perhaps MSG_MORE someday */
 	if (msg->msg_flags & ~(MSG_DONTWAIT | MSG_CMSG_COMPAT)) {
-		printk(KERN_INFO "msg_flags 0x%08X\n", msg->msg_flags);
 		ret = -EOPNOTSUPP;
 		goto out;
 	}
@@ -1007,14 +1005,16 @@ int rds_sendmsg(struct kiocb *iocb, struct socket *sock, struct msghdr *msg,
 		goto out;
 
 	if (rm->rdma.op_active && !conn->c_trans->xmit_rdma) {
-		printk_ratelimited(KERN_NOTICE "rdma_op %p conn xmit_rdma %p\n",
+		if (printk_ratelimit())
+			printk(KERN_NOTICE "rdma_op %p conn xmit_rdma %p\n",
 			       &rm->rdma, conn->c_trans->xmit_rdma);
 		ret = -EOPNOTSUPP;
 		goto out;
 	}
 
 	if (rm->atomic.op_active && !conn->c_trans->xmit_atomic) {
-		printk_ratelimited(KERN_NOTICE "atomic_op %p conn xmit_atomic %p\n",
+		if (printk_ratelimit())
+			printk(KERN_NOTICE "atomic_op %p conn xmit_atomic %p\n",
 			       &rm->atomic, conn->c_trans->xmit_atomic);
 		ret = -EOPNOTSUPP;
 		goto out;

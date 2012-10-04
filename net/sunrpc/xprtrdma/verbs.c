@@ -47,7 +47,6 @@
  *  o buffer memory
  */
 
-#include <linux/interrupt.h>
 #include <linux/pci.h>	/* for Tavor hack below */
 #include <linux/slab.h>
 

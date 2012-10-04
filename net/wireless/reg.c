@@ -49,10 +49,8 @@
 #include "nl80211.h"
 
 #ifdef CONFIG_CFG80211_REG_DEBUG
-#define REG_DBG_PRINT(format, args...) \
-	do { \
-		printk(KERN_DEBUG pr_fmt(format), ##args);	\
-	} while (0)
+#define REG_DBG_PRINT(format, args...)			\
+	printk(KERN_DEBUG pr_fmt(format), ##args)
 #else
 #define REG_DBG_PRINT(args...)
 #endif
@@ -331,6 +329,9 @@ static void reg_regdb_search(struct work_struct *work)
 	struct reg_regdb_search_request *request;
 	const struct ieee80211_regdomain *curdom, *regdom;
 	int i, r;
+	bool set_reg = false;
+
+	mutex_lock(&cfg80211_mutex);
 
 	mutex_lock(&reg_regdb_search_mutex);
 	while (!list_empty(&reg_regdb_search_list)) {
@@ -346,9 +347,7 @@ static void reg_regdb_search(struct work_struct *work)
 				r = reg_copy_regd(&regdom, curdom);
 				if (r)
 					break;
-				mutex_lock(&cfg80211_mutex);
-				set_regdom(regdom);
-				mutex_unlock(&cfg80211_mutex);
+				set_reg = true;
 				break;
 			}
 		}
@@ -356,6 +355,11 @@ static void reg_regdb_search(struct work_struct *work)
 		kfree(request);
 	}
 	mutex_unlock(&reg_regdb_search_mutex);
+
+	if (set_reg)
+		set_regdom(regdom);
+
+	mutex_unlock(&cfg80211_mutex);
 }
 
 static DECLARE_WORK(reg_regdb_work, reg_regdb_search);
@@ -379,7 +383,15 @@ static void reg_regdb_query(const char *alpha2)
 
 	schedule_work(&reg_regdb_work);
 }
+
+/* Feel free to add any other sanity checks here */
+static void reg_regdb_size_check(void)
+{
+	/* We should ideally BUILD_BUG_ON() but then random builds would fail */
+	WARN_ONCE(!reg_regdb_size, "db.txt is empty, you should update it...");
+}
 #else
+static inline void reg_regdb_size_check(void) {}
 static inline void reg_regdb_query(const char *alpha2) {}
 #endif /* CONFIG_CFG80211_INTERNAL_REGDB */
 
@@ -907,7 +919,7 @@ static bool ignore_reg_update(struct wiphy *wiphy,
 	    wiphy->flags & WIPHY_FLAG_CUSTOM_REGULATORY) {
 		REG_DBG_PRINT("Ignoring regulatory request %s "
 			      "since the driver uses its own custom "
-			      "regulatory domain ",
+			      "regulatory domain\n",
 			      reg_initiator_name(initiator));
 		return true;
 	}
@@ -921,7 +933,7 @@ static bool ignore_reg_update(struct wiphy *wiphy,
 	    !is_world_regdom(last_request->alpha2)) {
 		REG_DBG_PRINT("Ignoring regulatory request %s "
 			      "since the driver requires its own regulatory "
-			      "domain to be set first",
+			      "domain to be set first\n",
 			      reg_initiator_name(initiator));
 		return true;
 	}
@@ -1350,7 +1362,7 @@ static void reg_set_request_processed(void)
 	spin_unlock(&reg_requests_lock);
 
 	if (last_request->initiator == NL80211_REGDOM_SET_BY_USER)
-		cancel_delayed_work_sync(&reg_timeout);
+		cancel_delayed_work(&reg_timeout);
 
 	if (need_more_processing)
 		schedule_work(&reg_work);
@@ -1492,7 +1504,7 @@ static void reg_process_pending_hints(void)
 	/* When last_request->processed becomes true this will be rescheduled */
 	if (last_request && !last_request->processed) {
 		REG_DBG_PRINT("Pending regulatory request, waiting "
-			      "for it to be processed...");
+			      "for it to be processed...\n");
 		goto out;
 	}
 
@@ -1773,6 +1785,7 @@ static void restore_alpha2(char *alpha2, bool reset_user)
 static void restore_regulatory_settings(bool reset_user)
 {
 	char alpha2[2];
+	char world_alpha2[2];
 	struct reg_beacon *reg_beacon, *btmp;
 	struct regulatory_request *reg_request, *tmp;
 	LIST_HEAD(tmp_reg_req_list);
@@ -1823,11 +1836,13 @@ static void restore_regulatory_settings(bool reset_user)
 
 	/* First restore to the basic regulatory settings */
 	cfg80211_regdomain = cfg80211_world_regdom;
+	world_alpha2[0] = cfg80211_regdomain->alpha2[0];
+	world_alpha2[1] = cfg80211_regdomain->alpha2[1];
 
 	mutex_unlock(&reg_mutex);
 	mutex_unlock(&cfg80211_mutex);
 
-	regulatory_hint_core(cfg80211_regdomain->alpha2);
+	regulatory_hint_core(world_alpha2);
 
 	/*
 	 * This restores the ieee80211_regdom module parameter
@@ -2208,7 +2223,7 @@ out:
 static void reg_timeout_work(struct work_struct *work)
 {
 	REG_DBG_PRINT("Timeout while waiting for CRDA to reply, "
-		      "restoring regulatory settings");
+		      "restoring regulatory settings\n");
 	restore_regulatory_settings(true);
 }
 
@@ -2224,6 +2239,8 @@ int __init regulatory_init(void)
 
 	spin_lock_init(&reg_requests_lock);
 	spin_lock_init(&reg_pending_beacons_lock);
+
+	reg_regdb_size_check();
 
 	cfg80211_regdomain = cfg80211_world_regdom;
 

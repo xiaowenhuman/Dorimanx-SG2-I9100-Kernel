@@ -50,8 +50,7 @@ static void emit_log_char(struct debug_log *debug_log, char c)
 		debug_log->log_start = debug_log->log_end - log_buff_len;
 }
 
-__printf(2, 3)
-static int fdebug_log(struct debug_log *debug_log, const char *fmt, ...)
+static int fdebug_log(struct debug_log *debug_log, char *fmt, ...)
 {
 	va_list args;
 	static char debug_log_buf[256];
@@ -75,14 +74,14 @@ static int fdebug_log(struct debug_log *debug_log, const char *fmt, ...)
 	return 0;
 }
 
-int debug_log(struct bat_priv *bat_priv, const char *fmt, ...)
+int debug_log(struct bat_priv *bat_priv, char *fmt, ...)
 {
 	va_list args;
 	char tmp_log_buf[256];
 
 	va_start(args, fmt);
 	vscnprintf(tmp_log_buf, sizeof(tmp_log_buf), fmt, args);
-	fdebug_log(bat_priv->debug_log, "[%10lu] %s",
+	fdebug_log(bat_priv->debug_log, "[%10u] %s",
 		   (jiffies / HZ), tmp_log_buf);
 	va_end(args);
 
@@ -115,7 +114,7 @@ static ssize_t log_read(struct file *file, char __user *buf,
 	    !(debug_log->log_end - debug_log->log_start))
 		return -EAGAIN;
 
-	if (!buf)
+	if ((!buf) || (count < 0))
 		return -EINVAL;
 
 	if (count == 0)
@@ -185,7 +184,7 @@ static int debug_log_setup(struct bat_priv *bat_priv)
 	if (!bat_priv->debug_dir)
 		goto err;
 
-	bat_priv->debug_log = kzalloc(sizeof(*bat_priv->debug_log), GFP_ATOMIC);
+	bat_priv->debug_log = kzalloc(sizeof(struct debug_log), GFP_ATOMIC);
 	if (!bat_priv->debug_log)
 		goto err;
 

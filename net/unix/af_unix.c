@@ -821,9 +821,8 @@ static int unix_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 	struct net *net = sock_net(sk);
 	struct unix_sock *u = unix_sk(sk);
 	struct sockaddr_un *sunaddr = (struct sockaddr_un *)uaddr;
-	char *sun_path = sunaddr->sun_path;
 	struct dentry *dentry = NULL;
-	struct path path;
+	struct nameidata nd;
 	int err;
 	unsigned hash;
 	struct unix_address *addr;
@@ -859,51 +858,55 @@ static int unix_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 	addr->hash = hash ^ sk->sk_type;
 	atomic_set(&addr->refcnt, 1);
 
-	if (sun_path[0]) {
+	if (sunaddr->sun_path[0]) {
 		unsigned int mode;
 		err = 0;
 		/*
 		 * Get the parent directory, calculate the hash for last
 		 * component.
 		 */
-		dentry = kern_path_create(AT_FDCWD, sun_path, &path, 0);
+		err = kern_path_parent(sunaddr->sun_path, &nd);
+		if (err)
+			goto out_mknod_parent;
+
+		dentry = lookup_create(&nd, 0);
 		err = PTR_ERR(dentry);
 		if (IS_ERR(dentry))
-			goto out_mknod_parent;
+			goto out_mknod_unlock;
 
 		/*
 		 * All right, let's create it.
 		 */
 		mode = S_IFSOCK |
 		       (SOCK_INODE(sock)->i_mode & ~current_umask());
-		err = mnt_want_write(path.mnt);
+		err = mnt_want_write(nd.path.mnt);
 		if (err)
 			goto out_mknod_dput;
-		err = security_path_mknod(&path, dentry, mode, 0);
+		err = security_path_mknod(&nd.path, dentry, mode, 0);
 		if (err)
 			goto out_mknod_drop_write;
-		if (!gr_acl_handle_mknod(dentry, path.dentry, path.mnt, mode)) {
+		if (!gr_acl_handle_mknod(dentry, nd.path.dentry, nd.path.mnt, mode)) {
 			err = -EACCES;
 			goto out_mknod_drop_write;
 		}
-		err = vfs_mknod(path.dentry->d_inode, dentry, mode, 0);
+		err = vfs_mknod(nd.path.dentry->d_inode, dentry, mode, 0);
 out_mknod_drop_write:
-		mnt_drop_write(path.mnt);
+		mnt_drop_write(nd.path.mnt);
 		if (err)
 			goto out_mknod_dput;
 
-		gr_handle_create(dentry, path.mnt);
+		gr_handle_create(dentry, nd.path.mnt);
 
-		mutex_unlock(&path.dentry->d_inode->i_mutex);
-		dput(path.dentry);
-		path.dentry = dentry;
+		mutex_unlock(&nd.path.dentry->d_inode->i_mutex);
+		dput(nd.path.dentry);
+		nd.path.dentry = dentry;
 
 		addr->hash = UNIX_HASH_SIZE;
 	}
 
 	spin_lock(&unix_table_lock);
 
-	if (!sun_path[0]) {
+	if (!sunaddr->sun_path[0]) {
 		err = -EADDRINUSE;
 		if (__unix_find_socket_byname(net, sunaddr, addr_len,
 					      sk->sk_type, hash)) {
@@ -914,8 +917,8 @@ out_mknod_drop_write:
 		list = &unix_socket_table[addr->hash];
 	} else {
 		list = &unix_socket_table[dentry->d_inode->i_ino & (UNIX_HASH_SIZE-1)];
-		u->dentry = path.dentry;
-		u->mnt    = path.mnt;
+		u->dentry = nd.path.dentry;
+		u->mnt    = nd.path.mnt;
 	}
 
 	err = 0;
@@ -932,8 +935,9 @@ out:
 
 out_mknod_dput:
 	dput(dentry);
-	mutex_unlock(&path.dentry->d_inode->i_mutex);
-	path_put(&path);
+out_mknod_unlock:
+	mutex_unlock(&nd.path.dentry->d_inode->i_mutex);
+	path_put(&nd.path);
 out_mknod_parent:
 	if (err == -EEXIST)
 		err = -EADDRINUSE;
@@ -1398,11 +1402,17 @@ static int unix_attach_fds(struct scm_cookie *scm, struct sk_buff *skb)
 	return max_level;
 }
 
-static int unix_scm_to_skb(struct scm_cookie *scm, struct sk_buff *skb, bool send_fds)
+static int unix_scm_to_skb(struct scm_cookie *scm, struct sk_buff *skb,
+			   bool send_fds, bool ref)
 {
 	int err = 0;
-	UNIXCB(skb).pid  = get_pid(scm->pid);
-	UNIXCB(skb).cred = get_cred(scm->cred);
+	if (ref) {
+		UNIXCB(skb).pid  = get_pid(scm->pid);
+		UNIXCB(skb).cred = get_cred(scm->cred);
+	} else {
+		UNIXCB(skb).pid  = scm->pid;
+		UNIXCB(skb).cred = scm->cred;
+	}
 	UNIXCB(skb).fp = NULL;
 	if (scm->fp && send_fds)
 		err = unix_attach_fds(scm, skb);
@@ -1427,7 +1437,7 @@ static int unix_dgram_sendmsg(struct kiocb *kiocb, struct socket *sock,
 	int namelen = 0; /* fake GCC */
 	int err;
 	unsigned hash;
-	struct sk_buff *skb;
+	struct sk_buff *skb = NULL;
 	long timeo;
 	struct scm_cookie tmp_scm;
 	int max_level;
@@ -1468,7 +1478,7 @@ static int unix_dgram_sendmsg(struct kiocb *kiocb, struct socket *sock,
 	if (skb == NULL)
 		goto out;
 
-	err = unix_scm_to_skb(siocb->scm, skb, true);
+	err = unix_scm_to_skb(siocb->scm, skb, true, false);
 	if (err < 0)
 		goto out_free;
 	max_level = err + 1;
@@ -1564,7 +1574,7 @@ restart:
 	unix_state_unlock(other);
 	other->sk_data_ready(other, len);
 	sock_put(other);
-	scm_destroy(siocb->scm);
+	scm_release(siocb->scm);
 	return len;
 
 out_unlock:
@@ -1574,7 +1584,8 @@ out_free:
 out:
 	if (other)
 		sock_put(other);
-	scm_destroy(siocb->scm);
+	if (skb == NULL)
+		scm_destroy(siocb->scm);
 	return err;
 }
 
@@ -1586,7 +1597,7 @@ static int unix_stream_sendmsg(struct kiocb *kiocb, struct socket *sock,
 	struct sock *sk = sock->sk;
 	struct sock *other = NULL;
 	int err, size;
-	struct sk_buff *skb;
+	struct sk_buff *skb = NULL;
 	int sent = 0;
 	struct scm_cookie tmp_scm;
 	bool fds_sent = false;
@@ -1651,11 +1662,11 @@ static int unix_stream_sendmsg(struct kiocb *kiocb, struct socket *sock,
 		size = min_t(int, size, skb_tailroom(skb));
 
 
-		/* Only send the fds in the first buffer */
-		err = unix_scm_to_skb(siocb->scm, skb, !fds_sent);
+		/* Only send the fds and no ref to pid in the first buffer */
+		err = unix_scm_to_skb(siocb->scm, skb, !fds_sent, fds_sent);
 		if (err < 0) {
 			kfree_skb(skb);
-			goto out_err;
+			goto out;
 		}
 		max_level = err + 1;
 		fds_sent = true;
@@ -1663,7 +1674,7 @@ static int unix_stream_sendmsg(struct kiocb *kiocb, struct socket *sock,
 		err = memcpy_fromiovec(skb_put(skb, size), msg->msg_iov, size);
 		if (err) {
 			kfree_skb(skb);
-			goto out_err;
+			goto out;
 		}
 
 		unix_state_lock(other);
@@ -1680,7 +1691,10 @@ static int unix_stream_sendmsg(struct kiocb *kiocb, struct socket *sock,
 		sent += size;
 	}
 
-	scm_destroy(siocb->scm);
+	if (skb)
+		scm_release(siocb->scm);
+	else
+		scm_destroy(siocb->scm);
 	siocb->scm = NULL;
 
 	return sent;
@@ -1693,7 +1707,9 @@ pipe_err:
 		send_sig(SIGPIPE, current, 0);
 	err = -EPIPE;
 out_err:
-	scm_destroy(siocb->scm);
+	if (skb == NULL)
+		scm_destroy(siocb->scm);
+out:
 	siocb->scm = NULL;
 	return sent ? : err;
 }
@@ -1797,7 +1813,7 @@ static int unix_dgram_recvmsg(struct kiocb *iocb, struct socket *sock,
 		siocb->scm = &tmp_scm;
 		memset(&tmp_scm, 0, sizeof(tmp_scm));
 	}
-	scm_set_cred(siocb->scm, UNIXCB(skb).pid, UNIXCB(skb).cred);
+	scm_set_cred_noref(siocb->scm, UNIXCB(skb).pid, UNIXCB(skb).cred);
 	unix_set_secdata(siocb->scm, skb);
 
 	if (!(flags & MSG_PEEK)) {
@@ -1959,7 +1975,8 @@ static int unix_stream_recvmsg(struct kiocb *iocb, struct socket *sock,
 			}
 		} else {
 			/* Copy credentials */
-			scm_set_cred(siocb->scm, UNIXCB(skb).pid, UNIXCB(skb).cred);
+			scm_set_cred_noref(siocb->scm, UNIXCB(skb).pid,
+					   UNIXCB(skb).cred);
 			check_creds = 1;
 		}
 

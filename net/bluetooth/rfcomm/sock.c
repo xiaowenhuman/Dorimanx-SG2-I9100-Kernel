@@ -42,7 +42,6 @@
 #include <linux/device.h>
 #include <linux/debugfs.h>
 #include <linux/seq_file.h>
-#include <linux/security.h>
 #include <net/sock.h>
 
 #include <asm/system.h>
@@ -265,8 +264,6 @@ static void rfcomm_sock_init(struct sock *sk, struct sock *parent)
 
 		pi->sec_level = rfcomm_pi(parent)->sec_level;
 		pi->role_switch = rfcomm_pi(parent)->role_switch;
-
-		security_sk_clone(parent, sk);
 	} else {
 		pi->dlc->defer_setup = 0;
 
@@ -547,6 +544,7 @@ static int rfcomm_sock_getname(struct socket *sock, struct sockaddr *addr, int *
 
 	BT_DBG("sock %p, sk %p", sock, sk);
 
+	memset(sa, 0, sizeof(*sa));
 	sa->rc_family  = AF_BLUETOOTH;
 	sa->rc_channel = rfcomm_pi(sk)->channel;
 	if (peer)
@@ -788,6 +786,7 @@ static int rfcomm_sock_getsockopt_old(struct socket *sock, int optname, char __u
 			err = -ENOTCONN;
 			break;
 		}
+
 
 		memset(&cinfo, 0, sizeof(cinfo));
 		cinfo.hci_handle = conn->hcon->handle;

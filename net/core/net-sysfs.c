@@ -100,6 +100,7 @@ NETDEVICE_SHOW(addr_assign_type, fmt_dec);
 NETDEVICE_SHOW(addr_len, fmt_dec);
 NETDEVICE_SHOW(iflink, fmt_dec);
 NETDEVICE_SHOW(ifindex, fmt_dec);
+NETDEVICE_SHOW(features, fmt_hex);
 NETDEVICE_SHOW(type, fmt_dec);
 NETDEVICE_SHOW(link_mode, fmt_dec);
 
@@ -311,6 +312,7 @@ static struct device_attribute net_class_attributes[] = {
 	__ATTR(ifalias, S_IRUGO | S_IWUSR, show_ifalias, store_ifalias),
 	__ATTR(iflink, S_IRUGO, show_iflink, NULL),
 	__ATTR(ifindex, S_IRUGO, show_ifindex, NULL),
+	__ATTR(features, S_IRUGO, show_features, NULL),
 	__ATTR(type, S_IRUGO, show_type, NULL),
 	__ATTR(link_mode, S_IRUGO, show_link_mode, NULL),
 	__ATTR(address, S_IRUGO, show_address, NULL),
@@ -664,14 +666,11 @@ static ssize_t store_rps_dev_flow_table_cnt(struct netdev_rx_queue *queue,
 	if (count) {
 		int i;
 
-		if (count > INT_MAX)
-			return -EINVAL;
-		count = roundup_pow_of_two(count);
-		if (count > (ULONG_MAX - sizeof(struct rps_dev_flow_table))
-				/ sizeof(struct rps_dev_flow)) {
+		if (count > 1<<30) {
 			/* Enforce a limit to prevent overflow */
 			return -EINVAL;
 		}
+		count = roundup_pow_of_two(count);
 		table = vmalloc(RPS_DEV_FLOW_TABLE_SIZE(count));
 		if (!table)
 			return -ENOMEM;
@@ -990,10 +989,10 @@ static ssize_t store_xps_map(struct netdev_queue *queue,
 	}
 
 	if (nonempty)
-		rcu_assign_pointer(dev->xps_maps, new_dev_maps);
+		RCU_INIT_POINTER(dev->xps_maps, new_dev_maps);
 	else {
 		kfree(new_dev_maps);
-		rcu_assign_pointer(dev->xps_maps, NULL);
+		RCU_INIT_POINTER(dev->xps_maps, NULL);
 	}
 
 	if (dev_maps)

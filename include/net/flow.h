@@ -90,6 +90,16 @@ static inline void flowi4_init_output(struct flowi4 *fl4, int oif,
 	fl4->fl4_dport = dport;
 	fl4->fl4_sport = sport;
 }
+
+/* Reset some input parameters after previous lookup */
+static inline void flowi4_update_output(struct flowi4 *fl4, int oif, __u8 tos,
+					__be32 daddr, __be32 saddr)
+{
+	fl4->flowi4_oif = oif;
+	fl4->flowi4_tos = tos;
+	fl4->daddr = daddr;
+	fl4->saddr = saddr;
+}
 				      
 
 struct flowi6 {
@@ -207,7 +217,6 @@ extern struct flow_cache_object *flow_cache_lookup(
 		u8 dir, flow_resolve_t resolver, void *ctx);
 
 extern void flow_cache_flush(void);
-extern void flow_cache_flush_deferred(void);
 extern atomic_unchecked_t flow_cache_genid;
 
 #endif

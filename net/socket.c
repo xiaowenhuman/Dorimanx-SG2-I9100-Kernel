@@ -794,9 +794,9 @@ static ssize_t sock_sendpage(struct file *file, struct page *page,
 
 	sock = file->private_data;
 
-	flags = !(file->f_flags & O_NONBLOCK) ? 0 : MSG_DONTWAIT;
-	if (more)
-		flags |= MSG_MORE;
+	flags = (file->f_flags & O_NONBLOCK) ? MSG_DONTWAIT : 0;
+	/* more is a combination of MSG_MORE and MSG_SENDPAGE_NOTLAST */
+	flags |= more;
 
 	return kernel_sendpage(sock, page, offset, size, flags);
 }
@@ -2534,7 +2534,7 @@ int sock_register(const struct net_proto_family *ops)
 				      lockdep_is_held(&net_family_lock)))
 		err = -EEXIST;
 	else {
-		rcu_assign_pointer(net_families[ops->family], ops);
+		RCU_INIT_POINTER(net_families[ops->family], ops);
 		err = 0;
 	}
 	spin_unlock(&net_family_lock);
@@ -2562,7 +2562,7 @@ void sock_unregister(int family)
 	BUG_ON(family < 0 || family >= NPROTO);
 
 	spin_lock(&net_family_lock);
-	rcu_assign_pointer(net_families[family], NULL);
+	RCU_INIT_POINTER(net_families[family], NULL);
 	spin_unlock(&net_family_lock);
 
 	synchronize_rcu();
@@ -2707,6 +2707,7 @@ static int dev_ifconf(struct net *net, struct compat_ifconf __user *uifc32)
 	if (copy_from_user(&ifc32, uifc32, sizeof(struct compat_ifconf)))
 		return -EFAULT;
 
+	memset(&ifc, 0, sizeof(ifc));
 	if (ifc32.ifcbuf == 0) {
 		ifc32.ifc_len = 0;
 		ifc.ifc_len = 0;
