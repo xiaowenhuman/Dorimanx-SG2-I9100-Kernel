@@ -266,7 +266,7 @@ on boot
     chown system system /sys/devices/system/cpu/cpufreq/interactive/min_sample_time
     chmod 0644 /sys/devices/system/cpu/cpufreq/interactive/min_sample_time
     chown system system /sys/devices/system/cpu/cpufreq/interactive/hispeed_freq
-    write /sys/devices/system/cpu/cpufreq/interactive/hispeed_freq 729200
+    write /sys/devices/system/cpu/cpufreq/interactive/hispeed_freq 691200
     chmod 0444 /sys/devices/system/cpu/cpufreq/interactive/hispeed_freq
     chown system system /sys/devices/system/cpu/cpufreq/interactive/go_hispeed_load
     chmod 0644 /sys/devices/system/cpu/cpufreq/interactive/go_hispeed_load
@@ -286,14 +286,14 @@ on boot
     chmod 0664 /sys/block/mmcblk0/queue/scheduler
 
     # Lower maximum frequency when screen is off
-    write /sys/devices/system/cpu/cpu0/cpufreq/screen_off_max_freq 153600
+    write /sys/devices/system/cpu/cpu0/cpufreq/screen_off_max_freq 172800
 
-    # cpufreq interactive governor: timer 20ms, min sample 20ms, hispeed 729MHz
+    # cpufreq interactive governor: timer 20ms, min sample 20ms, hispeed 691MHz
     write /sys/devices/system/cpu/cpufreq/interactive/timer_rate 20000
     write /sys/devices/system/cpu/cpufreq/interactive/min_sample_time 20000
     # set max freq
-    write /sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq 1305600
-    write /sys/devices/system/cpu/cpu1/cpufreq/scaling_max_freq 1305600
+    write /sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq 1382400
+    write /sys/devices/system/cpu/cpu1/cpufreq/scaling_max_freq 1382400
 
     chmod 0444 /sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq
     chmod 0444 /sys/devices/system/cpu/cpu1/cpufreq/scaling_max_freq
