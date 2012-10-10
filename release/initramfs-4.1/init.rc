@@ -286,7 +286,7 @@ on boot
     chmod 0664 /sys/block/mmcblk0/queue/scheduler
 
     # Lower maximum frequency when screen is off
-    write /sys/devices/system/cpu/cpu0/cpufreq/screen_off_max_freq 172800
+    write /sys/devices/system/cpu/cpu0/cpufreq/screen_off_max_freq 345600
 
     # cpufreq interactive governor: timer 20ms, min sample 20ms, hispeed 691MHz
     write /sys/devices/system/cpu/cpufreq/interactive/timer_rate 20000
