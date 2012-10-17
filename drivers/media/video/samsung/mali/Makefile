@@ -318,9 +318,15 @@ mali-y += common/mali_l2_cache.o
 # Mali SLP Global lock feature
 ifeq ($(USING_MALI_SLP_GLOBAL_LOCK),1)
 mali-y += \
+<<<<<<< HEAD
 	linux/mali_slp_global_lock.o
 endif
 
+=======
+	platform/pegasus-m400/mali_platform_dvfs.o
+endif #($(CONFIG_CPU_EXYNOS4210),y)
+endif #($(USING_MALI_DVFS_ENABLED),1)
+>>>>>>> 8ccda20... merge with JB sources
 
 ifeq ($(PANIC_ON_WATCHDOG_TIMEOUT),1)
 	EXTRA_CFLAGS += -DUSING_KERNEL_PANIC

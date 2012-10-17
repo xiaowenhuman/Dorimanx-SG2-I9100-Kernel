@@ -662,6 +662,14 @@ static const struct dmi_system_id intel_no_lvds[] = {
 	},
 	{
 		.callback = intel_no_lvds_dmi_callback,
+		.ident = "Dell OptiPlex FX170",
+		.matches = {
+			DMI_MATCH(DMI_SYS_VENDOR, "Dell Inc."),
+			DMI_MATCH(DMI_PRODUCT_NAME, "OptiPlex FX170"),
+		},
+	},
+	{
+		.callback = intel_no_lvds_dmi_callback,
 		.ident = "AOpen Mini PC",
 		.matches = {
 			DMI_MATCH(DMI_SYS_VENDOR, "AOpen"),
@@ -708,11 +716,43 @@ static const struct dmi_system_id intel_no_lvds[] = {
 		},
 	},
 	{
+                .callback = intel_no_lvds_dmi_callback,
+                .ident = "Clientron E830",
+                .matches = {
+                        DMI_MATCH(DMI_SYS_VENDOR, "Clientron"),
+                        DMI_MATCH(DMI_PRODUCT_NAME, "E830"),
+                },
+        },
+        {
 		.callback = intel_no_lvds_dmi_callback,
 		.ident = "Asus EeeBox PC EB1007",
 		.matches = {
 			DMI_MATCH(DMI_SYS_VENDOR, "ASUSTeK Computer INC."),
 			DMI_MATCH(DMI_PRODUCT_NAME, "EB1007"),
+		},
+	},
+	{
+		.callback = intel_no_lvds_dmi_callback,
+		.ident = "Asus AT5NM10T-I",
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "ASUSTeK Computer INC."),
+			DMI_MATCH(DMI_BOARD_NAME, "AT5NM10T-I"),
+		},
+	},
+	{
+		.callback = intel_no_lvds_dmi_callback,
+		.ident = "Hewlett-Packard t5745",
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "Hewlett-Packard"),
+			DMI_MATCH(DMI_BOARD_NAME, "hp t5745"),
+		},
+	},
+	{
+		.callback = intel_no_lvds_dmi_callback,
+		.ident = "Hewlett-Packard st5747",
+		.matches = {
+			DMI_MATCH(DMI_BOARD_VENDOR, "Hewlett-Packard"),
+			DMI_MATCH(DMI_BOARD_NAME, "hp st5747"),
 		},
 	},
 	{
@@ -828,6 +868,18 @@ static bool lvds_is_present_in_vbt(struct drm_device *dev,
 	return false;
 }
 
+static bool intel_lvds_supported(struct drm_device *dev)
+{
+	/* With the introduction of the PCH we gained a dedicated
+	 * LVDS presence pin, use it. */
+	if (HAS_PCH_SPLIT(dev))
+		return true;
+
+	/* Otherwise LVDS was only attached to mobile products,
+	 * except for the inglorious 830gm */
+	return IS_MOBILE(dev) && !IS_I830(dev);
+}
+
 /**
  * intel_lvds_init - setup LVDS connectors on this device
  * @dev: drm device
@@ -848,6 +900,9 @@ bool intel_lvds_init(struct drm_device *dev)
 	u32 lvds;
 	int pipe;
 	u8 pin;
+
+	if (!intel_lvds_supported(dev))
+		return false;
 
 	/* Skip init on machines we know falsely report LVDS */
 	if (dmi_check_system(intel_no_lvds))
@@ -896,9 +951,11 @@ bool intel_lvds_init(struct drm_device *dev)
 	intel_encoder->type = INTEL_OUTPUT_LVDS;
 
 	intel_encoder->clone_mask = (1 << INTEL_LVDS_CLONE_BIT);
-	intel_encoder->crtc_mask = (1 << 1);
-	if (INTEL_INFO(dev)->gen >= 5)
-		intel_encoder->crtc_mask |= (1 << 0);
+	if (HAS_PCH_SPLIT(dev))
+		intel_encoder->crtc_mask = (1 << 0) | (1 << 1) | (1 << 2);
+	else
+		intel_encoder->crtc_mask = (1 << 1);
+
 	drm_encoder_helper_add(encoder, &intel_lvds_helper_funcs);
 	drm_connector_helper_add(connector, &intel_lvds_connector_helper_funcs);
 	connector->display_info.subpixel_order = SubPixelHorizontalRGB;

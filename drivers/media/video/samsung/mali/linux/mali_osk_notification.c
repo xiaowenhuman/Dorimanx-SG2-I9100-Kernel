@@ -46,6 +46,9 @@ typedef struct _mali_osk_notification_wrapper_t_struct
     _mali_osk_notification_t data;   /**< Notification data */
 } _mali_osk_notification_wrapper_t;
 
+bool	init_sem_main;
+struct semaphore sem_main_lock;
+
 _mali_osk_notification_queue_t *_mali_osk_notification_queue_init( void )
 {
 	_mali_osk_notification_queue_t *	result;
@@ -57,6 +60,11 @@ _mali_osk_notification_queue_t *_mali_osk_notification_queue_init( void )
 	init_waitqueue_head(&result->receive_queue);
 	INIT_LIST_HEAD(&result->head);
 
+	if (!init_sem_main) {
+		sema_init(&sem_main_lock, 1);
+		init_sem_main = true;
+	}
+
 	return result;
 }
 
@@ -65,11 +73,24 @@ _mali_osk_notification_t *_mali_osk_notification_create( u32 type, u32 size )
 	/* OPT Recycling of notification objects */
     _mali_osk_notification_wrapper_t *notification;
 
+<<<<<<< HEAD
 	notification = (_mali_osk_notification_wrapper_t *)kmalloc( sizeof(_mali_osk_notification_wrapper_t) + size,
 	                                                            GFP_KERNEL | __GFP_HIGH | __GFP_REPEAT);
+=======
+	if (MALI_PMM_NOTIFICATION_TYPE == type) {
+		if (size != sizeof(mali_pmm_message_t))
+			return NULL;
+	}
+
+	down(&sem_main_lock);
+
+	notification = (_mali_osk_notification_wrapper_t *)kmalloc( sizeof(_mali_osk_notification_wrapper_t) + size, GFP_KERNEL );
+>>>>>>> 8ccda20... merge with JB sources
     if (NULL == notification)
     {
 		MALI_DEBUG_PRINT(1, ("Failed to create a notification object\n"));
+		up(&sem_main_lock);
+
 		return NULL;
     }
 
@@ -90,18 +111,25 @@ _mali_osk_notification_t *_mali_osk_notification_create( u32 type, u32 size )
 	notification->data.result_buffer_size = size;
 
 	/* all ok */
+	up(&sem_main_lock);
+
     return &(notification->data);
 }
 
 void _mali_osk_notification_delete( _mali_osk_notification_t *object )
 {
 	_mali_osk_notification_wrapper_t *notification;
+
+	down(&sem_main_lock);
+
 	MALI_DEBUG_ASSERT_POINTER( object );
 
     notification = container_of( object, _mali_osk_notification_wrapper_t, data );
 
 	/* Free the container */
 	kfree(notification);
+
+	up(&sem_main_lock);
 }
 
 void _mali_osk_notification_queue_term( _mali_osk_notification_queue_t *queue )
