@@ -211,7 +211,6 @@ struct mxt224_data {
 #define MAX_GESTURES 30
 #define MAX_GESTURE_FINGERS 5
 #define MAX_GESTURE_STEPS 10
-bool gestures_enabled = true;
 
 // Definitions
 struct gesture_point {
@@ -1385,7 +1384,7 @@ static void report_input_data(struct mxt224_data *data)
 			// When a finger is released and its movement was not completed yet, reset it
 			spin_lock_irqsave(&gestures_lock, flags);
 			state = get_suspend_state();
-			if (gestures_enabled && state == 0) {
+			if (state == 0) {
 				for (gesture_no = 0; gesture_no < MAX_GESTURES; gesture_no++) {
 					if (gestures_detected[gesture_no])
 						// Ignore gestures already reported
@@ -1435,7 +1434,8 @@ static void report_input_data(struct mxt224_data *data)
 		// Finger being moved, check the gesture steps progress
 		spin_lock_irqsave(&gestures_lock, flags);
 		state = get_suspend_state();
-		if (gestures_enabled && state == 0) {
+		printk(KERN_ERR "[GESTURES] suspend state: %d\n", state);
+		if (state == 0) {
 			for (gesture_no = 0; gesture_no < MAX_GESTURES; gesture_no++) {
 				if (gestures_detected[gesture_no])
 					// Ignore further movement for gestures already reported
@@ -1584,7 +1584,7 @@ static void report_input_data(struct mxt224_data *data)
 	// Check completed gestures or reset all progress if all fingers released
 	spin_lock_irqsave(&gestures_lock, flags);
 	state = get_suspend_state();
-	if (gestures_enabled && state == 0) {
+	if (state == 0) {
 		for (gesture_no = 0; gesture_no < MAX_GESTURES; gesture_no++) {
 			if (gestures_detected[gesture_no])
 				// Gesture already reported, skip
@@ -2316,8 +2316,7 @@ static void mxt224_early_suspend(struct early_suspend *h)
 						early_suspend);
 
 #ifdef CONFIG_TOUCHSCREEN_GESTURES
-	if (gestures_enabled)
-		reset_gestures_detection(false);
+	reset_gestures_detection(false);
 #endif
 
 	copy_data->mxt224_enabled = 0;
@@ -2371,8 +2370,7 @@ static int mxt224_suspend(struct device *dev)
 	struct mxt224_data *data = i2c_get_clientdata(client);
 
 #ifdef CONFIG_TOUCHSCREEN_GESTURES
-	if (gestures_enabled)
-		reset_gestures_detection(false);
+	reset_gestures_detection(false);
 #endif
 
 	copy_data->mxt224_enabled = 0;
@@ -2476,7 +2474,8 @@ static ssize_t mov_hysti_store(struct device *dev,
 	
 	//do not apply if the screen is not active,
 	//it will be applied after turning on the screen anyway -gm
-	if ( copy_data->mxt224_enabled == 1) {
+	if ( copy_data->mxt224_enabled == 1)
+	{
 		i = sprintf(buff, "%u %u %u", TOUCH_MULTITOUCHSCREEN_T9, 11, register_value);
 		qt602240_object_setting(dev, attr, buff, i);
 	}
@@ -3652,32 +3651,6 @@ static ssize_t touch_lock_freq_store(struct device *dev,
 	return size;
 }
 
-#ifdef CONFIG_TOUCHSCREEN_GESTURES
-static ssize_t gestures_show(struct device *dev,
-				  struct device_attribute *attr, char *buf)
-{
-	return sprintf(buf, "%d\n", gestures_enabled);
-}
-
-static ssize_t gestures_store(struct device *dev,
-				  struct device_attribute *attr,
-				  const char *buf, size_t size)
-{
-
-	int ret;
-	unsigned int value;
-
-	ret = sscanf(buf, "%d\n", &value);
-
-	if (ret != 1)
-		return -EINVAL;
-	else
-		gestures_enabled = value ? true : false;
-
-	return size;
-}
-#endif
-
 static ssize_t slide2wake_show(struct device *dev,
 				  struct device_attribute *attr, char *buf)
 {
@@ -3802,10 +3775,6 @@ static DEVICE_ATTR(tsp_touch_freq, S_IRUGO | S_IWUSR | S_IWGRP,
 	touch_lock_freq_show, touch_lock_freq_store);
 static DEVICE_ATTR(tsp_flash_timeout, S_IRUGO | S_IWUSR | S_IWGRP,
 	led_flash_timeout_show, led_flash_timeout_store);
-#ifdef CONFIG_TOUCHSCREEN_GESTURES
-static DEVICE_ATTR(tsp_gestures, S_IRUGO | S_IWUSR | S_IWGRP,
-	gestures_show, gestures_store);
-#endif
 static DEVICE_ATTR(tsp_slide2wake, S_IRUGO | S_IWUSR | S_IWGRP,
 	slide2wake_show, slide2wake_store);
 
@@ -4146,8 +4115,7 @@ static int __devinit mxt224_probe(struct i2c_client *client,
 		return -ENOMEM;
 
 #ifdef CONFIG_TOUCHSCREEN_GESTURES
-	if (gestures_enabled)
-		spin_lock_init(&gestures_lock);
+	spin_lock_init(&gestures_lock);
 #endif
 
 	data->num_fingers = pdata->max_finger_touches;
@@ -4406,17 +4374,15 @@ static int __devinit mxt224_probe(struct i2c_client *client,
 		printk(KERN_ERR "[TSP] sysfs_create_group()is falled\n");
 
 #ifdef CONFIG_TOUCHSCREEN_GESTURES
-	if (gestures_enabled) {
-		ret = misc_register(&gestures_device);
-		if (ret) {
-			printk(KERN_ERR "[TSP] gestures misc_register failed.\n");
+	ret = misc_register(&gestures_device);
+	if (ret) {
+		printk(KERN_ERR "[TSP] gestures misc_register failed.\n");
+	} else {
+		if (sysfs_create_group(&gestures_device.this_device->kobj, &gestures_attr_group)) {
+			printk(KERN_ERR "[TSP] sysfs_create_group() has failed\n");
+			misc_deregister(&gestures_device);
 		} else {
-			if (sysfs_create_group(&gestures_device.this_device->kobj, &gestures_attr_group)) {
-				printk(KERN_ERR "[TSP] sysfs_create_group() has failed\n");
-				misc_deregister(&gestures_device);
-			} else {
-				gestures_device_registered = true;
-			}
+			gestures_device_registered = true;
 		}
 	}
 #endif
@@ -4456,12 +4422,6 @@ static int __devinit mxt224_probe(struct i2c_client *client,
 	if (device_create_file(sec_touchscreen, &dev_attr_tsp_flash_timeout) < 0)
 		printk(KERN_ERR "Failed to create device file(%s)!\n",
 			dev_attr_tsp_flash_timeout.attr.name);
-
-#ifdef CONFIG_TOUCHSCREEN_GESTURES
-	if (device_create_file(sec_touchscreen, &dev_attr_tsp_gestures) < 0)
-		printk(KERN_ERR "Failed to create device file(%s)!\n",
-			dev_attr_tsp_gestures.attr.name);
-#endif
 
 	if (device_create_file(sec_touchscreen, &dev_attr_tsp_slide2wake) < 0)
 		printk(KERN_ERR "Failed to create device file(%s)!\n",
@@ -4661,12 +4621,10 @@ static int __init mxt224_init(void)
 static void __exit mxt224_exit(void)
 {
 #ifdef CONFIG_TOUCHSCREEN_GESTURES
-	if (gestures_enabled) {
-		if (gestures_device_registered) {
-			sysfs_remove_group(&gestures_device.this_device->kobj, &gestures_attr_group);
-			misc_deregister(&gestures_device);
-			gestures_device_registered = false;
-		}
+	if (gestures_device_registered) {
+		sysfs_remove_group(&gestures_device.this_device->kobj, &gestures_attr_group);
+		misc_deregister(&gestures_device);
+		gestures_device_registered = false;
 	}
 #endif
 	i2c_del_driver(&mxt224_i2c_driver);
