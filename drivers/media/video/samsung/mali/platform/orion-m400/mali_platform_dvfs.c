@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2012 ARM Limited. All rights reserved.
+ * Copyright (C) 2010 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the GNU General Public License version 2
  * as published by the Free Software Foundation, and any use by you of this program is subject to the terms of such GNU licence.
@@ -40,7 +40,7 @@
 static int bMaliDvfsRun = 0;
 
 static _mali_osk_atomic_t bottomlock_status;
-int bottom_lock_step = 0;
+static int bottom_lock_step;
 
 typedef struct mali_dvfs_tableTag{
 	unsigned int clock;
@@ -179,33 +179,15 @@ mali_dvfs_threshold_table mali_dvfs_threshold[MALI_DVFS_STEPS]={
 
 static unsigned int asv_3d_volt_5_table[ASV_5_LEVEL][MALI_DVFS_STEPS] = {
 	/* L4(108MHz), L3(160MHz), L2(266MHz), L1(330MHz) */
-<<<<<<< HEAD
-	{ 950000, 1000000, 1100000, 1150000},	/* S */
-	{ 950000, 1000000, 1100000, 1150000},	/* A */
-	{ 900000,  950000, 1000000, 1100000},	/* B */
-	{ 900000,  950000, 1000000, 1050000},	/* C */
-	{ 900000,  950000,  950000, 1000000},	/* D */
-=======
 	{ 950000, 1000000, 1100000, 1150000, 1200000},	/* S */
 	{ 950000, 1000000, 1100000, 1150000, 1200000},	/* A */
 	{ 900000,  950000, 1000000, 1100000, 1200000},	/* B */
 	{ 900000,  950000, 1000000, 1050000, 1150000},	/* C */
 	{ 900000,  950000,  950000, 1000000, 1100000},	/* D */
->>>>>>> 8ccda20... merge with JB sources
 };
 
 static unsigned int asv_3d_volt_8_table[ASV_8_LEVEL][MALI_DVFS_STEPS] = {
 	/* L4(108MHz), L3(160MHz), L2(266MHz)), L1(330MHz) */
-<<<<<<< HEAD
-	{ 950000, 1000000, 1100000, 1150000},	/* SS */
-	{ 950000, 1000000, 1100000, 1150000},	/* A1 */
-	{ 950000, 1000000, 1100000, 1150000},	/* A2 */
-	{ 900000,  950000, 1000000, 1100000},	/* B1 */
-	{ 900000,  950000, 1000000, 1100000},	/* B2 */
-	{ 900000,  950000, 1000000, 1050000},	/* C1 */
-	{ 900000,  950000, 1000000, 1050000},	/* C2 */
-	{ 900000,  950000,  950000, 1000000},	/* D1 */
-=======
 	{ 950000, 1000000, 1100000, 1150000, 1200000},	/* SS */
 	{ 950000, 1000000, 1100000, 1150000, 1200000},	/* A1 */
 	{ 950000, 1000000, 1100000, 1150000, 1200000},	/* A2 */
@@ -214,13 +196,12 @@ static unsigned int asv_3d_volt_8_table[ASV_8_LEVEL][MALI_DVFS_STEPS] = {
 	{ 900000,  950000, 1000000, 1050000, 1150000},	/* C1 */
 	{ 900000,  950000, 1000000, 1050000, 1150000},	/* C2 */
 	{ 900000,  950000,  950000, 1000000, 1100000},	/* D1 */
->>>>>>> 8ccda20... merge with JB sources
 };
 #endif /* ASV_LEVEL */
 
 /*dvfs status*/
 mali_dvfs_currentstatus maliDvfsStatus;
-int mali_dvfs_control = 0;
+int mali_dvfs_control=0;
 
 u32 mali_dvfs_utilization = 255;
 
@@ -549,11 +530,7 @@ static mali_bool mali_dvfs_status(u32 utilization)
 #ifdef EXYNOS4_ASV_ENABLED
 	if (asv_applied == MALI_FALSE) {
 		mali_dvfs_table_update();
-<<<<<<< HEAD
-		change_mali_dvfs_status(0, 0);
-=======
 		change_mali_dvfs_status(1, 0);
->>>>>>> 8ccda20... merge with JB sources
 		asv_applied = MALI_TRUE;
 
 		return MALI_TRUE;
@@ -585,27 +562,28 @@ static mali_bool mali_dvfs_status(u32 utilization)
 	return MALI_TRUE;
 }
 
+
+
 int mali_dvfs_is_running(void)
 {
 	return bMaliDvfsRun;
 
 }
 
+
+
 void mali_dvfs_late_resume(void)
 {
 	// set the init clock as low when resume
-	set_mali_dvfs_status(0, 0);
+	set_mali_dvfs_status(0,0);
 }
+
 
 static void mali_dvfs_work_handler(struct work_struct *w)
 {
-<<<<<<< HEAD
-	bMaliDvfsRun = 1;
-=======
 	int change_clk = 0;
 	int change_step = 0;
 	bMaliDvfsRun=1;
->>>>>>> 8ccda20... merge with JB sources
 
 	/* dvfs table change when clock was changed */
 	if (step0_clk != mali_dvfs[0].clock) {
@@ -692,7 +670,7 @@ static void mali_dvfs_work_handler(struct work_struct *w)
 	if (!mali_dvfs_status(mali_dvfs_utilization))
 		MALI_DEBUG_PRINT(1,( "error on mali dvfs status in mali_dvfs_work_handler"));
 
-	bMaliDvfsRun = 0;
+	bMaliDvfsRun=0;
 }
 
 mali_bool init_mali_dvfs_status(int step)
@@ -821,8 +799,6 @@ int mali_dvfs_bottom_lock_pop(void)
 
 	return _mali_osk_atomic_dec_return(&bottomlock_status);
 }
-<<<<<<< HEAD
-=======
 
 int mali_dvfs_get_vol(int step)
 {
@@ -844,4 +820,3 @@ int mali_vol_get_from_table(int vol)
 	return 0;
 }
 #endif
->>>>>>> 8ccda20... merge with JB sources

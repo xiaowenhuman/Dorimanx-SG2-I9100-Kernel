@@ -396,22 +396,6 @@ static int ump_file_ioctl(struct inode *inode, struct file *filp, unsigned int c
 			err = ump_unlock_wrapper((u32 __user *)argument, session_data);
 			break;
 
-		case UMP_IOC_CACHE_OPERATIONS_CONTROL:
-			err = ump_cache_operations_control_wrapper((u32 __user *)argument, session_data);
-			break;
-
-		case UMP_IOC_SWITCH_HW_USAGE:
-			err = ump_switch_hw_usage_wrapper((u32 __user *)argument, session_data);
-			break;
-
-		case UMP_IOC_LOCK:
-			err = ump_lock_wrapper((u32 __user *)argument, session_data);
-			break;
-
-		case UMP_IOC_UNLOCK:
-			err = ump_unlock_wrapper((u32 __user *)argument, session_data);
-			break;
-
 		default:
 			DBG_MSG(1, ("No handler for IOCTL. cmd: 0x%08x, arg: 0x%08lx\n", cmd, arg));
 			err = -EFAULT;
@@ -473,11 +457,7 @@ static int ump_file_mmap(struct file * filp, struct vm_area_struct * vma)
 		DBG_MSG(3, ("UMP Map function: Forcing the CPU to use cache\n"));
 	}
 	/* By setting this flag, during a process fork; the child process will not have the parent UMP mappings */
-<<<<<<< HEAD
-	vma->vm_flags |= VM_DONTCOPY;
-=======
 	AOSPROM vma->vm_flags |= VM_DONTCOPY;
->>>>>>> 8ccda20... merge with JB sources
 
 	DBG_MSG(4, ("UMP vma->flags: %x\n", vma->vm_flags ));
 

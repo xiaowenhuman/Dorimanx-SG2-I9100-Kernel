@@ -140,11 +140,7 @@ int ump_size_get_wrapper(u32 __user * argument, struct ump_session_data  * sessi
 /*
  * IOCTL operation; Do cache maintenance on specified UMP memory.
  */
-<<<<<<< HEAD
-int ump_msync_wrapper(u32 __user * argument, struct ump_session_data  * session_data)
-=======
 int ump_msync_wrapper(u32 __user * argument, struct ump_session_data  * session_data, bool old)
->>>>>>> 8ccda20... merge with JB sources
 {
 	_ump_uk_msync_s user_interaction;
 
