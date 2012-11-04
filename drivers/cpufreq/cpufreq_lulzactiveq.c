@@ -324,11 +324,11 @@ struct cpufreq_governor cpufreq_gov_lulzactive = {
 };
 
 struct workqueue_struct *dvfs_workqueue;
-// putted tunners aggrouped into this structure, to be more clear.
+/* putted tunners aggrouped into this structure, to be more clear. */
 static struct dbs_tuners {
-    unsigned int  hotplug_sampling_rate;
+	unsigned int  hotplug_sampling_rate;
 
-    /* hotplug tuners - from lulzactiveq */
+	/* hotplug tuners - from lulzactiveq */
 	unsigned int cpu_up_rate;
 	unsigned int cpu_down_rate;
 	unsigned int up_nr_cpus;
@@ -347,8 +347,6 @@ static struct dbs_tuners {
 	.min_cpu_lock = DEF_MIN_CPU_LOCK,
 	.hotplug_lock = ATOMIC_INIT(0),
 	.ignore_nice = 0,
-#ifdef CONFIG_HAS_EARLYSUSPEND
-#endif
 };
 
 static unsigned int get_lulzfreq_table_size(struct cpufreq_lulzactive_cpuinfo *pcpu) {
@@ -372,12 +370,12 @@ static inline void fix_screen_off_min_step(struct cpufreq_lulzactive_cpuinfo *pc
 	}
 	
 	if (DEFAULT_SCREEN_OFF_MIN_STEP == screen_off_min_step) 
-		for(screen_off_min_step=0;
+		for (screen_off_min_step = 0;
 		pcpu->lulzfreq_table[screen_off_min_step].frequency != 500000;
 		screen_off_min_step++);
 	
 	if (screen_off_min_step >= pcpu->lulzfreq_table_size)
-		for(screen_off_min_step=0;
+		for (screen_off_min_step = 0;
 		pcpu->lulzfreq_table[screen_off_min_step].frequency != 500000;
 		screen_off_min_step++);
 }
@@ -421,7 +419,7 @@ static void cpufreq_lulzactive_timer(unsigned long data)
 	if (!pcpu->governor_enabled)
 		goto exit;
 
-	// do not let inc_cpu_load be less than dec_cpu_load.
+	/* do not let inc_cpu_load be less than dec_cpu_load. */
 	if (dec_cpu_load > inc_cpu_load) {
 		dec_cpu_load = inc_cpu_load; 
 	}
@@ -469,7 +467,6 @@ static void cpufreq_lulzactive_timer(unsigned long data)
 
 	}
 
-
 	if (delta_idle > delta_time)
 		cpu_load = 0;
 	else
@@ -493,7 +490,6 @@ static void cpufreq_lulzactive_timer(unsigned long data)
 			cputime64_to_jiffies64(cur_nice);
 
 		delta_idle += jiffies_to_usecs(cur_nice_jiffies);
-
 	}
 
 	if ((delta_time == 0) || (delta_idle > delta_time))
@@ -525,25 +521,21 @@ static void cpufreq_lulzactive_timer(unsigned long data)
 					goto rearm;
 				}
 			
-				// apply pump_up_step by tegrak
+				/* apply pump_up_step by tegrak */
 				index -= pump_up_step;
 				if (index < 0)
 					index = 0;
 			
 				new_freq = pcpu->lulzfreq_table[index].frequency;
-			}
-			else
+			} else
 				new_freq = pcpu->policy->max;
-		}
-		else {
+		} else {
 			if (pcpu->policy->cur == pcpu->policy->min)
 				new_freq = hispeed_freq;
 			else
 				new_freq = pcpu->policy->max * cpu_load / 100;
 		}
-
-	}
-	else if (cpu_load <= dec_cpu_load){		
+	} else if (cpu_load <= dec_cpu_load) {		
 		if (pump_down_step) {
 			ret = cpufreq_frequency_table_target(
 				pcpu->policy, pcpu->lulzfreq_table,
@@ -553,7 +545,7 @@ static void cpufreq_lulzactive_timer(unsigned long data)
 				goto rearm;
 			}
 			
-			// apply pump_down_step by tegrak
+			/* apply pump_down_step by tegrak */
 			index += pump_down_step;
 			if (index >= pcpu->lulzfreq_table_size) {
 				index = pcpu->lulzfreq_table_size - 1;
@@ -566,7 +558,7 @@ static void cpufreq_lulzactive_timer(unsigned long data)
 			new_freq = pcpu->policy->cur * cpu_load / 100;
 		}		
 	} else {
-		new_freq = pcpu->policy->cur; //pcpu->lulzfreq_table[index].frequency;
+		new_freq = pcpu->policy->cur; /* pcpu->lulzfreq_table[index].frequency; */
 
 		/*
 		 * If the frequency goes up or down the freq_change_time must be renewed. 
@@ -579,10 +571,8 @@ static void cpufreq_lulzactive_timer(unsigned long data)
 		pcpu->freq_change_time_in_idle = get_cpu_idle_time_us(data, &pcpu->freq_change_time);
 
 		if (dbs_tuners_ins.ignore_nice)
-			pcpu->freq_change_prev_cpu_nice = kstat_cpu(data).cpustat.nice;
+			pcpu->idle_prev_cpu_nice = kcpustat_cpu(data).cpustat[CPUTIME_NICE];	
 	}
-
-	
 
 	if (cpufreq_frequency_table_target(pcpu->policy, pcpu->lulzfreq_table,
 					   new_freq, CPUFREQ_RELATION_H,
@@ -594,7 +584,7 @@ static void cpufreq_lulzactive_timer(unsigned long data)
 
 	new_freq = pcpu->lulzfreq_table[index].frequency;
 
-	// adjust freq when screen off
+	/* adjust freq when screen off */
 	new_freq = adjust_screen_off_freq(pcpu, new_freq);
 
 	if (pcpu->target_freq == new_freq)
@@ -641,7 +631,6 @@ rearm_if_notmax:
 		goto exit;
 
 rearm:
-
 	if (!timer_pending(&pcpu->cpu_timer)) {
 		/*
 		 * If already at min: if that CPU is idle, don't set timer.
@@ -908,7 +897,7 @@ static ssize_t store_hispeed_freq(struct kobject *kobj,
 static struct global_attr hispeed_freq_attr = __ATTR(hispeed_freq, 0644,
 		show_hispeed_freq, store_hispeed_freq);
 
-// inc_cpu_load
+/* inc_cpu_load */
 static ssize_t show_inc_cpu_load(struct kobject *kobj,
 				     struct attribute *attr, char *buf)
 {
@@ -918,12 +907,11 @@ static ssize_t show_inc_cpu_load(struct kobject *kobj,
 static ssize_t store_inc_cpu_load(struct kobject *kobj,
 			struct attribute *attr, const char *buf, size_t count)
 {
-	if(strict_strtoul(buf, 0, &inc_cpu_load)==-EINVAL) return -EINVAL;
+	if (strict_strtoul(buf, 0, &inc_cpu_load) == -EINVAL) return -EINVAL;
 	
 	if (inc_cpu_load > 100) {
 		inc_cpu_load = 100;
-	}
-	else if (inc_cpu_load < 10) {
+	} else if (inc_cpu_load < 10) {
 		inc_cpu_load = 10;
 	}
 	return count;
@@ -932,7 +920,7 @@ static ssize_t store_inc_cpu_load(struct kobject *kobj,
 static struct global_attr inc_cpu_load_attr = __ATTR(inc_cpu_load, 0666,
 		show_inc_cpu_load, store_inc_cpu_load);
 
-// dec_cpu_load
+/* dec_cpu_load */
 static ssize_t show_dec_cpu_load(struct kobject *kobj,
                      struct attribute *attr, char *buf)
 {
@@ -940,24 +928,23 @@ static ssize_t show_dec_cpu_load(struct kobject *kobj,
 }
 
 static ssize_t store_dec_cpu_load(struct kobject *kobj,
-            struct attribute *attr, const char *buf, size_t count)
+			struct attribute *attr, const char *buf, size_t count)
 {
-    if(strict_strtoul(buf, 0, &dec_cpu_load)==-EINVAL) return -EINVAL;
+	if (strict_strtoul(buf, 0, &dec_cpu_load) == -EINVAL) return -EINVAL;
 
-    if (dec_cpu_load > 90) {
-        dec_cpu_load = 90;
-    }
-    else if (dec_cpu_load <= 0) {
-        dec_cpu_load = 10;
-    }
+	if (dec_cpu_load > 90) {
+		dec_cpu_load = 90;
+	} else if (dec_cpu_load <= 0) {
+		dec_cpu_load = 10;
+	}
 
-    return count;
+	return count;
 }
 
 static struct global_attr dec_cpu_load_attr = __ATTR(dec_cpu_load, 0666,
 		show_dec_cpu_load, store_dec_cpu_load);
 
-// down_sample_time
+/* down_sample_time */
 static ssize_t show_down_sample_time(struct kobject *kobj,
 				struct attribute *attr, char *buf)
 {
@@ -967,14 +954,14 @@ static ssize_t show_down_sample_time(struct kobject *kobj,
 static ssize_t store_down_sample_time(struct kobject *kobj,
 			struct attribute *attr, const char *buf, size_t count)
 {
-	if(strict_strtoul(buf, 0, &down_sample_time)==-EINVAL) return -EINVAL;
+	if (strict_strtoul(buf, 0, &down_sample_time )== -EINVAL) return -EINVAL;
 	return count;
 }
 
 static struct global_attr down_sample_time_attr = __ATTR(down_sample_time, 0666,
 		show_down_sample_time, store_down_sample_time);
 
-// up_sample_time
+/* up_sample_time */
 static ssize_t show_up_sample_time(struct kobject *kobj,
 				struct attribute *attr, char *buf)
 {
@@ -984,14 +971,14 @@ static ssize_t show_up_sample_time(struct kobject *kobj,
 static ssize_t store_up_sample_time(struct kobject *kobj,
 			struct attribute *attr, const char *buf, size_t count)
 {
-	if(strict_strtoul(buf, 0, &up_sample_time)==-EINVAL) return -EINVAL;
+	if (strict_strtoul(buf, 0, &up_sample_time) == -EINVAL) return -EINVAL;
 	return count;
 }
 
 static struct global_attr up_sample_time_attr = __ATTR(up_sample_time, 0666,
 		show_up_sample_time, store_up_sample_time);
 
-// pump_up_step
+/* pump_up_step */
 static ssize_t show_pump_up_step(struct kobject *kobj,
 				     struct attribute *attr, char *buf)
 {
@@ -1001,14 +988,14 @@ static ssize_t show_pump_up_step(struct kobject *kobj,
 static ssize_t store_pump_up_step(struct kobject *kobj,
 			struct attribute *attr, const char *buf, size_t count)
 {
-	if(strict_strtoul(buf, 0, &pump_up_step)==-EINVAL) return -EINVAL;
+	if (strict_strtoul(buf, 0, &pump_up_step) == -EINVAL) return -EINVAL;
 	return count;
 }
 
 static struct global_attr pump_up_step_attr = __ATTR(pump_up_step, 0666,
 		show_pump_up_step, store_pump_up_step);
 
-// pump_down_step
+/* pump_down_step */
 static ssize_t show_pump_down_step(struct kobject *kobj,
 				     struct attribute *attr, char *buf)
 {
@@ -1020,10 +1007,10 @@ static ssize_t store_pump_down_step(struct kobject *kobj,
 {
 	struct cpufreq_lulzactive_cpuinfo *pcpu;
 	
-	if(strict_strtoul(buf, 0, &pump_down_step)==-EINVAL) return -EINVAL;
+	if (strict_strtoul(buf, 0, &pump_down_step) == -EINVAL) return -EINVAL;
 	
 	pcpu = &per_cpu(cpuinfo, 0);
-	// fix out of bound
+	/* fix out of bound */
 	if (pcpu->lulzfreq_table_size <= pump_down_step) {
 		pump_down_step = pcpu->lulzfreq_table_size - 1;
 	}
@@ -1033,7 +1020,7 @@ static ssize_t store_pump_down_step(struct kobject *kobj,
 static struct global_attr pump_down_step_attr = __ATTR(pump_down_step, 0666,
 		show_pump_down_step, store_pump_down_step);
 
-// screen_off_min_step
+/* screen_off_min_step */
 static ssize_t show_screen_off_min_step(struct kobject *kobj,
 				     struct attribute *attr, char *buf)
 {
@@ -1050,7 +1037,7 @@ static ssize_t store_screen_off_min_step(struct kobject *kobj,
 {
 	struct cpufreq_lulzactive_cpuinfo *pcpu;
 	
-	if(strict_strtoul(buf, 0, &screen_off_min_step)==-EINVAL) return -EINVAL;
+	if (strict_strtoul(buf, 0, &screen_off_min_step) == -EINVAL) return -EINVAL;
 	
 	pcpu = &per_cpu(cpuinfo, 0);
 	fix_screen_off_min_step(pcpu);
@@ -1061,7 +1048,7 @@ static ssize_t store_screen_off_min_step(struct kobject *kobj,
 static struct global_attr screen_off_min_step_attr = __ATTR(screen_off_min_step, 0666,
 		show_screen_off_min_step, store_screen_off_min_step);
 
-// author
+/* author */
 static ssize_t show_author(struct kobject *kobj,
 				     struct attribute *attr, char *buf)
 {
@@ -1071,7 +1058,7 @@ static ssize_t show_author(struct kobject *kobj,
 static struct global_attr author_attr = __ATTR(author, 0444,
 		show_author, NULL);
 
-// tuner
+/* tuner */
 static ssize_t show_tuner(struct kobject *kobj,
 				     struct attribute *attr, char *buf)
 {
@@ -1081,7 +1068,7 @@ static ssize_t show_tuner(struct kobject *kobj,
 static struct global_attr tuner_attr = __ATTR(tuner, 0444,
 		show_tuner, NULL);
 
-// version
+/* version */
 static ssize_t show_version(struct kobject *kobj,
 				     struct attribute *attr, char *buf)
 {
@@ -1091,7 +1078,7 @@ static ssize_t show_version(struct kobject *kobj,
 static struct global_attr version_attr = __ATTR(version, 0444,
 		show_version, NULL);
 
-// freq_table
+/* freq_table */
 static ssize_t show_freq_table(struct kobject *kobj,
 				     struct attribute *attr, char *buf)
 {
@@ -1112,7 +1099,6 @@ static ssize_t show_freq_table(struct kobject *kobj,
 static struct global_attr freq_table_attr = __ATTR(freq_table, 0444,
 		show_freq_table, NULL);
 
-
 /*
  * CPU hotplug lock interface
  */
@@ -1124,10 +1110,10 @@ static void apply_hotplug_lock(void)
 {
 	int online, possible, lock, flag;
 	struct work_struct *work;
-    struct cpufreq_lulzactive_cpuinfo *dbs_info;
+	struct cpufreq_lulzactive_cpuinfo *dbs_info;
 
 	/* do turn_on/off cpus */
-    dbs_info = &per_cpu(cpuinfo, 0); /* from CPU0 */
+	dbs_info = &per_cpu(cpuinfo, 0); /* from CPU0 */
 	online = num_online_cpus();
 	possible = num_possible_cpus();
 	lock = atomic_read(&g_hotplug_lock);
@@ -1228,7 +1214,7 @@ struct cpu_usage_history {
 };
 
 struct cpu_usage_history *hotplug_history;
-// defines file parameters names.
+/* defines file parameters names. */
 
 
 /* cpufreq_pegasusq Governor Tunables */
@@ -1341,7 +1327,7 @@ static ssize_t store_hotplug_sampling_rate(struct kobject *a, struct attribute *
 	if (ret != 1)
 		return -EINVAL;
 
-    dbs_tuners_ins.hotplug_sampling_rate = input; //, MIN_SAMPLING_RATE);
+	dbs_tuners_ins.hotplug_sampling_rate = input; /*, MIN_SAMPLING_RATE); */
 	return count;
 }
 static ssize_t store_cpu_up_rate(struct kobject *a, struct attribute *b,
@@ -1464,7 +1450,6 @@ static ssize_t store_ignore_nice_load(struct kobject *a, struct attribute *b,
 	return count;
 }
 
-
 define_one_global_rw(hotplug_sampling_rate);
 #ifndef CONFIG_CPU_EXYNOS4210
 define_one_global_rw(up_nr_cpus);
@@ -1475,7 +1460,6 @@ define_one_global_rw(hotplug_lock);
 define_one_global_rw(cpu_up_rate);
 define_one_global_rw(cpu_down_rate);
 define_one_global_rw(ignore_nice_load);
-
 
 static struct attribute *lulzactive_attributes[] = {
 	&hispeed_freq_attr.attr,
@@ -1488,9 +1472,8 @@ static struct attribute *lulzactive_attributes[] = {
 	&screen_off_min_step_attr.attr,
 	&ignore_nice_load.attr,
 
-    /*hotplug attributes*/
-
-    &hotplug_sampling_rate.attr,
+	/*hotplug attributes*/
+	&hotplug_sampling_rate.attr,
 	
 	&cpu_up_rate.attr,
 	&cpu_down_rate.attr,
@@ -1531,9 +1514,8 @@ void stop_lulzactiveq(void);
 		
 static struct attribute_group lulzactive_attr_group = {
 	.attrs = lulzactive_attributes,
-    .name = "lulzactiveq",
+	.name = "lulzactiveq",
 };
-
 
 static void cpu_up_work(struct work_struct *work)
 {
@@ -1636,7 +1618,7 @@ static int check_up(void)
 
 	if (num_hist % up_rate)
 		return 0;
-	if(num_hist == 0) num_hist = MAX_HOTPLUG_RATE;
+	if (num_hist == 0) num_hist = MAX_HOTPLUG_RATE;
 
 	for (i = num_hist - 1; i >= num_hist - up_rate; --i) {
 		usage = &hotplug_history->usage[i];
@@ -1656,7 +1638,7 @@ static int check_up(void)
 	if (avg_freq >= up_freq && avg_rq > up_rq) {
 		printk(KERN_ERR "[HOTPLUG IN] %s %d>=%d && %d>%d\n",
 			__func__, min_freq, up_freq, min_rq_avg, up_rq);
-//		hotplug_history->num_hist = 0;
+		/* hotplug_history->num_hist = 0; */
 		return 1;
 	}
 	return 0;
@@ -1696,7 +1678,7 @@ static int check_down(void)
 
 	if (num_hist % down_rate)
 		return 0;
-	if(num_hist == 0) num_hist = MAX_HOTPLUG_RATE; //make it circular -gm
+	if (num_hist == 0) num_hist = MAX_HOTPLUG_RATE; /* make it circular -gm */
 
 	for (i = num_hist - 1; i >= num_hist - down_rate; --i) {
 		usage = &hotplug_history->usage[i];
@@ -1716,7 +1698,7 @@ static int check_down(void)
 	if (avg_freq <= down_freq && avg_rq <= down_rq) {
 		printk(KERN_ERR "[HOTPLUG OUT] %s %d<=%d && %d<%d\n",
 			__func__, max_freq, down_freq, max_rq_avg, down_rq);
-//		hotplug_history->num_hist = 0;
+		/* hotplug_history->num_hist = 0; */
 		return 1;
 	}
 
@@ -1749,8 +1731,8 @@ static void dbs_check_cpu(struct cpufreq_lulzactive_cpuinfo *this_dbs_info)
 
 static void do_dbs_timer(struct work_struct *work)
 {
-    struct cpufreq_lulzactive_cpuinfo *dbs_info =
-            container_of(work, struct cpufreq_lulzactive_cpuinfo, work.work);
+	struct cpufreq_lulzactive_cpuinfo *dbs_info =
+			container_of(work, struct cpufreq_lulzactive_cpuinfo, work.work);
 	unsigned int cpu = dbs_info->cpu;
 	int delay;
 
@@ -1760,7 +1742,7 @@ static void do_dbs_timer(struct work_struct *work)
 	/* We want all CPUs to do sampling nearly on
 	 * same jiffy
 	 */
-    delay = usecs_to_jiffies(dbs_tuners_ins.hotplug_sampling_rate);
+	delay = usecs_to_jiffies(dbs_tuners_ins.hotplug_sampling_rate);
 
 	if (num_online_cpus() > 1)
 		delay -= jiffies % delay;
@@ -1768,11 +1750,12 @@ static void do_dbs_timer(struct work_struct *work)
 	queue_delayed_work_on(cpu, dvfs_workqueue, &dbs_info->work, delay);
 	mutex_unlock(&dbs_info->timer_mutex);
 }
+
 static inline void hotplug_timer_init(struct cpufreq_lulzactive_cpuinfo *dbs_info)
 {
 	/* We want all CPUs to do sampling nearly on same jiffy */
 	int delay = usecs_to_jiffies(DEF_START_DELAY * 1000 * 1000
-            + dbs_tuners_ins.hotplug_sampling_rate);
+			+ dbs_tuners_ins.hotplug_sampling_rate);
 	if (num_online_cpus() > 1)
 		delay -= jiffies % delay;
 
@@ -1818,7 +1801,7 @@ static int cpufreq_governor_lulzactive(struct cpufreq_policy *policy,
 			smp_wmb();
 			pcpu->lulzfreq_table_size = get_lulzfreq_table_size(pcpu);
 
-			// fix invalid screen_off_min_step
+			/* fix invalid screen_off_min_step */
 			fix_screen_off_min_step(pcpu);
 			if (dbs_tuners_ins.ignore_nice)
 				pcpu->freq_change_prev_cpu_nice =
@@ -1929,13 +1912,12 @@ static struct early_suspend lulzactive_power_suspend = {
 
 void start_lulzactiveq(void)
 {
-	//it is more appropriate to start the up_task thread after starting the governor -gm
+	/* it is more appropriate to start the up_task thread after starting the governor -gm */
 	unsigned int i, index500, index800;
 	struct cpufreq_lulzactive_cpuinfo *pcpu;
 	struct sched_param param = { .sched_priority = MAX_RT_PRIO-1 };
 
-	if( pump_up_step == 0 )
-	{
+	if (pump_up_step == 0) {
 		pcpu = &per_cpu(cpuinfo, 0);
 		cpufreq_frequency_table_target(
 				pcpu->policy, pcpu->lulzfreq_table,
@@ -1945,14 +1927,11 @@ void start_lulzactiveq(void)
 				pcpu->policy, pcpu->lulzfreq_table,
 				800000, CPUFREQ_RELATION_H,
 				&index800);
-		for(i=index800;i<index500;i++)
-		{
-		  if(pcpu->lulzfreq_table[i].frequency==CPUFREQ_ENTRY_INVALID) continue;
-		  pump_up_step++;
+		for (i = index800; i < index500; i++) {
+			if (pcpu->lulzfreq_table[i].frequency == CPUFREQ_ENTRY_INVALID) continue;
+			pump_up_step++;
 		}
-	}
-	if( pump_down_step == 0 )
-	{
+	} if (pump_down_step == 0) {
 		pump_down_step = pump_up_step;
 	}	
 
@@ -1968,7 +1947,7 @@ void start_lulzactiveq(void)
 
 void stop_lulzactiveq(void)
 {
-	//cleanup the thread after stopping the governor -gm
+	/* cleanup the thread after stopping the governor -gm */
 	kthread_stop(up_task);
 	put_task_struct(up_task);
 
@@ -1980,8 +1959,8 @@ void stop_lulzactiveq(void)
 
 static int __init cpufreq_lulzactive_init(void)
 {
-    unsigned int i; int ret;
-    struct cpufreq_lulzactive_cpuinfo *pcpu;
+	unsigned int i; int ret;
+	struct cpufreq_lulzactive_cpuinfo *pcpu;
 	up_sample_time = DEFAULT_UP_SAMPLE_TIME;
 	down_sample_time = DEFAULT_DOWN_SAMPLE_TIME;
 	inc_cpu_load = DEFAULT_INC_CPU_LOAD;
@@ -1992,7 +1971,7 @@ static int __init cpufreq_lulzactive_init(void)
 	screen_off_min_step = DEFAULT_SCREEN_OFF_MIN_STEP;
 	timer_rate = DEFAULT_TIMER_RATE;
 	ret = init_rq_avg();
-	if(ret) return ret;
+	if (ret) return ret;
 
 	hotplug_history = kzalloc(sizeof(struct cpu_usage_history), GFP_KERNEL);
 	if (!hotplug_history) {
