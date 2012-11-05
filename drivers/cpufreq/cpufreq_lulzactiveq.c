@@ -571,7 +571,7 @@ static void cpufreq_lulzactive_timer(unsigned long data)
 		pcpu->freq_change_time_in_idle = get_cpu_idle_time_us(data, &pcpu->freq_change_time);
 
 		if (dbs_tuners_ins.ignore_nice)
-			pcpu->idle_prev_cpu_nice = kcpustat_cpu(data).cpustat[CPUTIME_NICE];	
+			pcpu->freq_change_prev_cpu_nice = kcpustat_cpu(data).cpustat[CPUTIME_NICE];	
 	}
 
 	if (cpufreq_frequency_table_target(pcpu->policy, pcpu->lulzfreq_table,
