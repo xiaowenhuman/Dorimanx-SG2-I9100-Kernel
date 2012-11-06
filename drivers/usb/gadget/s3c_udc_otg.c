@@ -1281,27 +1281,14 @@ static int s3c_udc_probe(struct platform_device *pdev)
 	wake_lock_init(&dev->usb_cb_wake_lock, WAKE_LOCK_SUSPEND,
 			"usb cb wake lock");
 
-	/* irq setup after old hardware state is cleaned up */
-	irq = platform_get_irq(pdev, 0);
-
-	retval =
-	    request_irq(irq, s3c_udc_irq, 0, driver_name, dev);
-
-	if (retval != 0) {
-		DEBUG(KERN_ERR "%s: can't get irq %i, err %d\n", driver_name,
-		      dev->irq, retval);
-		retval = -EBUSY;
-		goto err_regs;
-	}
-	dev->irq = irq;
-	disable_irq(dev->irq);
-
 	dev->clk = clk_get(&pdev->dev, "usbotg");
 
 	if (IS_ERR(dev->clk)) {
 		dev_err(&pdev->dev, "Failed to get clock\n");
+		retval = -ENXIO;
 		goto err_irq;
 	}
+	clk_enable(dev->clk);
 
 	dev->usb_ctrl = dma_alloc_coherent(&pdev->dev,
 			sizeof(struct usb_ctrlrequest)*BACK2BACK_SIZE,
@@ -1313,6 +1300,25 @@ static int s3c_udc_probe(struct platform_device *pdev)
 		retval = -ENOMEM;
 		goto err_clk;
 	}
+
+	/* Mask any interrupt left unmasked by the bootloader */
+	__raw_writel(0, dev->regs + S3C_UDC_OTG_GINTMSK);
+
+	/* irq setup after old hardware state is cleaned up */
+	irq = platform_get_irq(pdev, 0);
+	retval =
+	    request_irq(irq, s3c_udc_irq, 0, driver_name, dev);
+
+	if (retval != 0) {
+		DEBUG(KERN_ERR "%s: can't get irq %i, err %d\n", driver_name,
+		      dev->irq, retval);
+		retval = -EBUSY;
+		goto err_regs;
+	}
+	dev->irq = irq;
+
+	disable_irq(dev->irq);
+	clk_disable(dev->clk);
 
 	create_proc_files();
 
