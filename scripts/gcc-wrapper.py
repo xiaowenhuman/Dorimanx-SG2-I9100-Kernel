@@ -45,8 +45,6 @@ import subprocess
 #    "dir.c:43",
 
 allowed_warnings = set([
-	"workqueue.c:515",
-	"mdnie.c:213",
  ])
 
 # Capture the name of the object file, can find it.
