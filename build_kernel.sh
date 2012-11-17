@@ -120,18 +120,8 @@ if [ -d $INITRAMFS_TMP/.hg ]; then
 	rm -rf $INITRAMFS_TMP/.hg
 fi;
 
-#For now remove the STweaks.apk from recovery, till GM release full ver with all the needed for it.
-#if [ -e $INITRAMFS_TMP/res/STweaks.apk ]; then
-#	rm -f  $INITRAMFS_TMP/res/STweaks.apk
-#fi;
-
 rm -f $INITRAMFS_TMP/compress-sql.sh
 rm -f $INITRAMFS_TMP/update*
-
-# this is MALI JB branch build.sh so we need to remove dualboot + logo of choose_rom binary fain to load. this is temp solution.
-#cat $INITRAMFS_TMP/sbin/init | sed s/if\ \\[\\[\ \"\$NOBOOTLOGO.*/NOBOOTLOGO\=1\;\ \\/sbin\\/choose_rom\;/g > $INITRAMFS_TMP/sbin/init_tmp;
-#mv $INITRAMFS_TMP/sbin/init_tmp $INITRAMFS_TMP/sbin/init;
-#chmod +x $INITRAMFS_TMP/sbin/init;
 
 # copy modules into initramfs
 mkdir -p $INITRAMFS/lib/modules
