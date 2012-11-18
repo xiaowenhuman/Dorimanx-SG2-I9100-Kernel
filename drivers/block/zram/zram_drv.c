@@ -121,7 +121,7 @@ static int zram_major;
 struct zram *zram_devices;
 
 /* Module params (documentation at end) */
-unsigned int zram_num_devices;
+static unsigned int num_devices;
 
 static void zram_stat_inc(u32 *v)
 {
@@ -894,6 +894,11 @@ static void destroy_device(struct zram *zram)
 		blk_cleanup_queue(zram->queue);
 }
 
+unsigned int zram_get_num_devices(void)
+{
+	return num_devices;
+}
+
 static int __init zram_init(void)
 {
 	int ret, dev_id;
@@ -902,12 +907,12 @@ static int __init zram_init(void)
 	 * Module parameter not specified by user. Use default
 	 * value as defined during kernel config.
 	 */
-	if (zram_num_devices == 0)
-		zram_num_devices = CONFIG_ZRAM_NUM_DEVICES;
+	if (num_devices == 0)
+		num_devices = CONFIG_ZRAM_NUM_DEVICES;
 
-	if (zram_num_devices > max_num_devices) {
+	if (num_devices > max_num_devices) {
 		pr_warning("Invalid value for num_devices: %u\n",
-				zram_num_devices);
+				num_devices);
 		ret = -EINVAL;
 		goto out;
 	}
@@ -920,15 +925,15 @@ static int __init zram_init(void)
 	}
 
 	/* Allocate the device array and initialize each one */
-	pr_info("Creating %u devices ...\n", zram_num_devices);
-	zram_devices = kzalloc(zram_num_devices * sizeof(struct zram),
+	pr_info("Creating %u devices ...\n", num_devices);
+	zram_devices = kzalloc(num_devices * sizeof(struct zram),
 				GFP_KERNEL);
 	if (!zram_devices) {
 		ret = -ENOMEM;
 		goto unregister;
 	}
 
-	for (dev_id = 0; dev_id < zram_num_devices; dev_id++) {
+	for (dev_id = 0; dev_id < num_devices; dev_id++) {
 		ret = create_device(&zram_devices[dev_id], dev_id);
 		if (ret)
 			goto free_devices;
@@ -951,7 +956,7 @@ static void __exit zram_exit(void)
 	int i;
 	struct zram *zram;
 
-	for (i = 0; i < zram_num_devices; i++) {
+	for (i = 0; i < num_devices; i++) {
 		zram = &zram_devices[i];
 
 		destroy_device(zram);
@@ -965,7 +970,7 @@ static void __exit zram_exit(void)
 	pr_debug("Cleanup done!\n");
 }
 
-module_param_named(num_devices, zram_num_devices, uint, 0);
+module_param(num_devices, uint, 0);
 MODULE_PARM_DESC(num_devices, "Number of zram devices");
 
 module_init(zram_init);
