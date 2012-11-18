@@ -903,13 +903,6 @@ static int __init zram_init(void)
 {
 	int ret, dev_id;
 
-	/*
-	 * Module parameter not specified by user. Use default
-	 * value as defined during kernel config.
-	 */
-	if (num_devices == 0)
-		num_devices = CONFIG_ZRAM_NUM_DEVICES;
-
 	if (num_devices > max_num_devices) {
 		pr_warning("Invalid value for num_devices: %u\n",
 				num_devices);
@@ -924,10 +917,18 @@ static int __init zram_init(void)
 		goto out;
 	}
 
+        /*
+         * Module parameter not specified by user. Use default
+         * value as defined during kernel config.
+         */
+	if (!num_devices) {
+		pr_info("num_devices not specified. Using default: 1\n");
+		num_devices = CONFIG_ZRAM_NUM_DEVICES;
+	}
+
 	/* Allocate the device array and initialize each one */
 	pr_info("Creating %u devices ...\n", num_devices);
-	zram_devices = kzalloc(num_devices * sizeof(struct zram),
-				GFP_KERNEL);
+	zram_devices = kzalloc(num_devices * sizeof(struct zram), GFP_KERNEL);
 	if (!zram_devices) {
 		ret = -ENOMEM;
 		goto unregister;
