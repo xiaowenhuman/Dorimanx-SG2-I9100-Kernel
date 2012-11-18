@@ -34,7 +34,7 @@ static struct zram *dev_to_zram(struct device *dev)
 	int i;
 	struct zram *zram = NULL;
 
-	for (i = 0; i < zram_get_num_devices(); i++) {
+	for (i = 0; i < zram_num_devices; i++) {
 		zram = &zram_devices[i];
 		if (disk_to_dev(zram->disk) == dev)
 			break;
@@ -58,7 +58,7 @@ static ssize_t disksize_store(struct device *dev,
 	u64 disksize;
 	struct zram *zram = dev_to_zram(dev);
 
-	ret = kstrtoull(buf, 10, &disksize);
+	ret = strict_strtoull(buf, 10, &disksize);
 	if (ret)
 		return ret;
 
@@ -174,7 +174,7 @@ static ssize_t reset_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t len)
 {
 	int ret;
-	unsigned short do_reset;
+	unsigned long do_reset;
 	struct zram *zram;
 	struct block_device *bdev;
 
@@ -185,7 +185,7 @@ static ssize_t reset_store(struct device *dev,
 	if (bdev->bd_holders)
 		return -EBUSY;
 
-	ret = kstrtou16(buf, 10, &do_reset);
+	ret = strict_strtoul(buf, 10, &do_reset);
 	if (ret)
 		return ret;
 
@@ -272,8 +272,10 @@ static ssize_t mem_used_total_show(struct device *dev,
 	u64 val = 0;
 	struct zram *zram = dev_to_zram(dev);
 
-	if (zram->init_done)
-		val = zs_get_total_size_bytes(zram->mem_pool);
+	if (zram->init_done) {
+		val = xv_get_total_size_bytes(zram->mem_pool) +
+			((u64)(zram->stats.pages_expand) << PAGE_SHIFT);
+	}
 
 	return sprintf(buf, "%llu\n", val);
 }
@@ -284,7 +286,7 @@ static DEVICE_ATTR(compressor, S_IRUGO | S_IWUSR,
 #endif
 static DEVICE_ATTR(disksize, S_IRUGO | S_IWUSR,
 		disksize_show, disksize_store);
-static DEVICE_ATTR(initstate, S_IRUGO, initstate_show, NULL);
+static DEVICE_ATTR(initstate, S_IRUGO | S_IWUSR, initstate_show, initstate_store);
 static DEVICE_ATTR(reset, S_IWUSR, NULL, reset_store);
 static DEVICE_ATTR(num_reads, S_IRUGO, num_reads_show, NULL);
 static DEVICE_ATTR(num_writes, S_IRUGO, num_writes_show, NULL);
@@ -316,3 +318,4 @@ static struct attribute *zram_disk_attrs[] = {
 struct attribute_group zram_disk_attr_group = {
 	.attrs = zram_disk_attrs,
 };
+
