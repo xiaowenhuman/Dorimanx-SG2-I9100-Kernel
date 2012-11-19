@@ -31,7 +31,6 @@
 #include <linux/random.h>
 #include <linux/hw_breakpoint.h>
 #include <linux/console.h>
-#include <linux/cpuidle.h>
 
 #include <asm/cacheflush.h>
 #include <asm/processor.h>
@@ -57,7 +56,7 @@ static const char *isa_modes[] = {
   "ARM" , "Thumb" , "Jazelle", "ThumbEE"
 };
 
-extern void setup_mm_for_reboot(void);
+extern void setup_mm_for_reboot(char mode);
 
 static volatile int hlt_counter;
 
@@ -144,7 +143,7 @@ void arm_machine_restart(char mode, const char *cmd)
 	 * we may need it to insert some 1:1 mappings so that
 	 * soft boot works.
 	 */
-	setup_mm_for_reboot();
+	setup_mm_for_reboot(mode);
 
 	/* Clean and invalidate caches */
 	flush_cache_all();
@@ -225,8 +224,7 @@ void cpu_idle(void)
 	/* endless idle loop with no priority at all */
 	while (1) {
 		idle_notifier_call_chain(IDLE_START);
-		tick_nohz_idle_enter();
-		rcu_idle_enter();
+		tick_nohz_stop_sched_tick(1);
 		while (!need_resched()) {
 #ifdef CONFIG_HOTPLUG_CPU
 			if (cpu_is_offline(smp_processor_id()))
@@ -242,8 +240,7 @@ void cpu_idle(void)
 				cpu_relax();
 			} else {
 				stop_critical_timings();
-				if (cpuidle_idle_call())
-					pm_idle();
+				pm_idle();
 				start_critical_timings();
 				/*
 				 * This will eventually be removed - pm_idle
@@ -254,10 +251,11 @@ void cpu_idle(void)
 				local_irq_enable();
 			}
 		}
-		rcu_idle_exit();
-		tick_nohz_idle_exit();
+		tick_nohz_restart_sched_tick();
 		idle_notifier_call_chain(IDLE_END);
-		schedule_preempt_disabled();
+		preempt_enable_no_resched();
+		schedule();
+		preempt_disable();
 	}
 }
 
@@ -274,15 +272,6 @@ __setup("reboot=", reboot_setup);
 void machine_shutdown(void)
 {
 #ifdef CONFIG_SMP
-	/*
-	 * Disable preemption so we're guaranteed to
-	 * run to power off or reboot and prevent
-	 * the possibility of switching to another
-	 * thread that might wind up blocking on
-	 * one of the stopped CPUs.
-	 */
-	preempt_disable();
-
 	smp_send_stop();
 #endif
 }
@@ -588,7 +577,6 @@ EXPORT_SYMBOL(kernel_thread);
 
 unsigned long get_wchan(struct task_struct *p)
 {
-/*
 	struct stackframe frame;
 	int count = 0;
 	if (!p || p == current || p->state == TASK_RUNNING)
@@ -596,8 +584,7 @@ unsigned long get_wchan(struct task_struct *p)
 
 	frame.fp = thread_saved_fp(p);
 	frame.sp = thread_saved_sp(p);
-	// recovered from the stack 
-	frame.lr = 0;
+	frame.lr = 0;			/* recovered from the stack */
 	frame.pc = thread_saved_pc(p);
 	do {
 		int ret = unwind_frame(&frame);
@@ -606,7 +593,6 @@ unsigned long get_wchan(struct task_struct *p)
 		if (!in_sched_functions(frame.pc))
 			return frame.pc;
 	} while (count ++ < 16);
-*/
 	return 0;
 }
 

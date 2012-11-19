@@ -13,12 +13,6 @@
 	*(.proc.info.init)						\
 	VMLINUX_SYMBOL(__proc_info_end) = .;
 
-#define IDMAP_TEXT							\
-	ALIGN_FUNCTION();						\
-	VMLINUX_SYMBOL(__idmap_text_start) = .;				\
-	*(.idmap.text)							\
-	VMLINUX_SYMBOL(__idmap_text_end) = .;
-
 #ifdef CONFIG_HOTPLUG_CPU
 #define ARM_CPU_DISCARD(x)
 #define ARM_CPU_KEEP(x)		x
@@ -29,10 +23,8 @@
 
 #if defined(CONFIG_SMP_ON_UP) && !defined(CONFIG_DEBUG_SPINLOCK)
 #define ARM_EXIT_KEEP(x)	x
-#define ARM_EXIT_DISCARD(x)
 #else
 #define ARM_EXIT_KEEP(x)
-#define ARM_EXIT_DISCARD(x)	x
 #endif
 
 OUTPUT_ARCH(arm)
@@ -98,11 +90,6 @@ SECTIONS
 #endif
 
 	/*
-	 * XXX: The linker does not define how output sections are
-	 * assigned to input sections when there are multiple statements
-	 * matching the same input section name.  There is no documented
-	 * order of matching.
-	 *
 	 * unwind exit sections must be discarded before the rest of the
 	 * unwind sections get included.
 	 */
@@ -111,9 +98,6 @@ SECTIONS
 		*(.ARM.extab.exit.text)
 		ARM_CPU_DISCARD(*(.ARM.exidx.cpuexit.text))
 		ARM_CPU_DISCARD(*(.ARM.extab.cpuexit.text))
-		ARM_EXIT_DISCARD(EXIT_TEXT)
-		ARM_EXIT_DISCARD(EXIT_DATA)
-		EXIT_CALL
 #ifndef CONFIG_HOTPLUG
 		*(.ARM.exidx.devexit.text)
 		*(.ARM.extab.devexit.text)
@@ -122,11 +106,6 @@ SECTIONS
 		*(.fixup)
 		*(__ex_table)
 #endif
-#ifndef CONFIG_SMP_ON_UP
-		*(.alt.smp.init)
-#endif
-		*(.discard)
-		*(.discard.*)
 	}
 
 	.text : {			/* Real text segment		*/
@@ -139,7 +118,6 @@ SECTIONS
 			SCHED_TEXT
 			LOCK_TEXT
 			KPROBES_TEXT
-			IDMAP_TEXT
 #ifdef CONFIG_MMU
 			*(.fixup)
 #endif
@@ -289,6 +267,9 @@ SECTIONS
 
 	STABS_DEBUG
 	.comment 0 : { *(.comment) }
+
+	/* Default discards */
+	DISCARDS
 
 #ifndef CONFIG_SMP_ON_UP
 	/DISCARD/ : {

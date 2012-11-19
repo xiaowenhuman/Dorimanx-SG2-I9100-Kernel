@@ -121,13 +121,15 @@
 	.endm
 #else	/* CONFIG_THUMB2_KERNEL */
 	.macro	svc_exit, rpsr
-	ldr	lr, [sp, #S_SP]			@ top of the stack
-	ldrd	r0, r1, [sp, #S_LR]		@ calling lr and pc
 	clrex					@ clear the exclusive monitor
-	stmdb	lr!, {r0, r1, \rpsr}		@ calling lr and rfe context
+	ldr	r0, [sp, #S_SP]			@ top of the stack
+	ldr	r1, [sp, #S_PC]			@ return address
+	tst	r0, #4				@ orig stack 8-byte aligned?
+	stmdb	r0, {r1, \rpsr}			@ rfe context
 	ldmia	sp, {r0 - r12}
-	mov	sp, lr
-	ldr	lr, [sp], #4
+	ldr	lr, [sp, #S_LR]
+	addeq	sp, sp, #S_FRAME_SIZE - 8	@ aligned
+	addne	sp, sp, #S_FRAME_SIZE - 4	@ not aligned
 	rfeia	sp!
 	.endm
 

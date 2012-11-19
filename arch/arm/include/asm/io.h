@@ -238,7 +238,7 @@ extern void _memset_io(volatile void __iomem *, int, size_t);
  * ioremap and friends.
  *
  * ioremap takes a PCI memory address, as specified in
- * Documentation/io-mapping.txt.
+ * Documentation/IO-mapping.txt.
  *
  */
 #ifndef __arch_ioremap

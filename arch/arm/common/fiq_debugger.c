@@ -80,10 +80,6 @@ struct fiq_debugger_state {
 	atomic_t unhandled_fiq_count;
 	bool in_fiq;
 
-	struct work_struct work;
-	spinlock_t work_lock;
-	char work_cmd[DEBUG_MAX];
-
 #ifdef CONFIG_FIQ_DEBUGGER_CONSOLE
 	struct console console;
 	struct tty_driver *tty_driver;
@@ -444,7 +440,6 @@ static struct frame_tail *user_backtrace(struct fiq_debugger_state *state,
 void dump_stacktrace(struct fiq_debugger_state *state,
 		struct pt_regs * const regs, unsigned int depth, void *ssp)
 {
-/*
 	struct frame_tail *tail;
 	struct thread_info *real_thread_info = THREAD_INFO(ssp);
 	struct stacktrace_state sts;
@@ -471,15 +466,12 @@ void dump_stacktrace(struct fiq_debugger_state *state,
 			regs->ARM_pc, regs->ARM_pc, regs->ARM_lr, regs->ARM_lr,
 			regs->ARM_sp, regs->ARM_fp);
 		walk_stackframe(&frame, report_trace, &sts);
-*/
 		return;
-/*
 	}
 
 	tail = ((struct frame_tail *) regs->ARM_fp) - 1;
 	while (depth-- && tail && !((unsigned long) tail & 3))
 		tail = user_backtrace(state, tail);
-*/
 }
 
 static void do_ps(struct fiq_debugger_state *state)
@@ -546,53 +538,6 @@ static void do_sysrq(struct fiq_debugger_state *state, char rq)
 	end_syslog_dump(state);
 }
 
-static void debug_schedule_work(struct fiq_debugger_state *state, char *cmd)
-{
-	unsigned long flags;
-
-	spin_lock_irqsave(&state->work_lock, flags);
-	if (state->work_cmd[0] != '\0') {
-		debug_printf(state, "work command processor busy\n");
-		spin_unlock_irqrestore(&state->work_lock, flags);
-		return;
-	}
-
-	strlcpy(state->work_cmd, cmd, sizeof(state->work_cmd));
-	spin_unlock_irqrestore(&state->work_lock, flags);
-
-	schedule_work(&state->work);
-}
-
-static void debug_work(struct work_struct *work)
-{
-	struct fiq_debugger_state *state;
-	char work_cmd[DEBUG_MAX];
-	char *cmd;
-	unsigned long flags;
-
-	state = container_of(work, struct fiq_debugger_state, work);
-
-	spin_lock_irqsave(&state->work_lock, flags);
-
-	strlcpy(work_cmd, state->work_cmd, sizeof(work_cmd));
-	state->work_cmd[0] = '\0';
-
-	spin_unlock_irqrestore(&state->work_lock, flags);
-
-	cmd = work_cmd;
-	if (!strncmp(cmd, "reboot", 6)) {
-		cmd += 6;
-		while (*cmd == ' ')
-			cmd++;
-		if (cmd != '\0')
-			kernel_restart(cmd);
-		else
-			kernel_restart(NULL);
-	} else {
-		debug_printf(state, "unknown work command '%s'\n", work_cmd);
-	}
-}
-
 /* This function CANNOT be called in FIQ context */
 static void debug_irq_exec(struct fiq_debugger_state *state, char *cmd)
 {
@@ -602,8 +547,6 @@ static void debug_irq_exec(struct fiq_debugger_state *state, char *cmd)
 		do_sysrq(state, 'h');
 	if (!strncmp(cmd, "sysrq ", 6))
 		do_sysrq(state, cmd[6]);
-	if (!strncmp(cmd, "reboot", 6))
-		debug_schedule_work(state, cmd);
 }
 
 static void debug_help(struct fiq_debugger_state *state)
@@ -613,8 +556,7 @@ static void debug_help(struct fiq_debugger_state *state)
 				" regs          Register dump\n"
 				" allregs       Extended Register dump\n"
 				" bt            Stack trace\n"
-				" reboot [<c>]  Reboot with command <c>\n"
-				" reset [<c>]   Hard reset with command <c>\n"
+				" reboot        Reboot\n"
 				" irqs          Interupt status\n"
 				" kmsg          Kernel log\n"
 				" version       Kernel version\n");
@@ -662,17 +604,8 @@ static bool debug_fiq_exec(struct fiq_debugger_state *state,
 		dump_allregs(state, regs);
 	} else if (!strcmp(cmd, "bt")) {
 		dump_stacktrace(state, (struct pt_regs *)regs, 100, svc_sp);
-	} else if (!strncmp(cmd, "reset", 5)) {
-		cmd += 5;
-		while (*cmd == ' ')
-			cmd++;
-		if (*cmd) {
-			char tmp_cmd[32];
-			strlcpy(tmp_cmd, cmd, sizeof(tmp_cmd));
-			machine_restart(tmp_cmd);
-		} else {
-			machine_restart(NULL);
-		}
+	} else if (!strcmp(cmd, "reboot")) {
+		arch_reset(0, 0);
 	} else if (!strcmp(cmd, "irqs")) {
 		dump_irqs(state);
 	} else if (!strcmp(cmd, "kmsg")) {
@@ -1134,9 +1067,6 @@ static int fiq_debugger_probe(struct platform_device *pdev)
 	state->uart_irq = uart_irq;
 	state->signal_irq = platform_get_irq_byname(pdev, "signal");
 	state->wakeup_irq = platform_get_irq_byname(pdev, "wakeup");
-
-	INIT_WORK(&state->work, debug_work);
-	spin_lock_init(&state->work_lock);
 
 	platform_set_drvdata(pdev, state);
 

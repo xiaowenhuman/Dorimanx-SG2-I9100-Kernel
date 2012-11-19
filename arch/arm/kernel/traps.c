@@ -25,7 +25,7 @@
 #include <linux/init.h>
 #include <linux/sched.h>
 
-#include <linux/atomic.h>
+#include <asm/atomic.h>
 #include <asm/cacheflush.h>
 #include <asm/system.h>
 #include <asm/unistd.h>
@@ -255,7 +255,7 @@ static int __die(const char *str, int err, struct thread_info *thread, struct pt
 	return ret;
 }
 
-static DEFINE_RAW_SPINLOCK(die_lock);
+static DEFINE_SPINLOCK(die_lock);
 
 /*
  * This function is protected against re-entrancy.
@@ -267,7 +267,7 @@ void die(const char *str, struct pt_regs *regs, int err)
 
 	oops_enter();
 
-	raw_spin_lock_irq(&die_lock);
+	spin_lock_irq(&die_lock);
 	console_verbose();
 	bust_spinlocks(1);
 	ret = __die(str, err, thread, regs);
@@ -277,7 +277,7 @@ void die(const char *str, struct pt_regs *regs, int err)
 
 	bust_spinlocks(0);
 	add_taint(TAINT_DIE);
-	raw_spin_unlock_irq(&die_lock);
+	spin_unlock_irq(&die_lock);
 	oops_exit();
 
 	if (in_interrupt())
@@ -302,24 +302,24 @@ void arm_notify_die(const char *str, struct pt_regs *regs,
 }
 
 static LIST_HEAD(undef_hook);
-static DEFINE_RAW_SPINLOCK(undef_lock);
+static DEFINE_SPINLOCK(undef_lock);
 
 void register_undef_hook(struct undef_hook *hook)
 {
 	unsigned long flags;
 
-	raw_spin_lock_irqsave(&undef_lock, flags);
+	spin_lock_irqsave(&undef_lock, flags);
 	list_add(&hook->node, &undef_hook);
-	raw_spin_unlock_irqrestore(&undef_lock, flags);
+	spin_unlock_irqrestore(&undef_lock, flags);
 }
 
 void unregister_undef_hook(struct undef_hook *hook)
 {
 	unsigned long flags;
 
-	raw_spin_lock_irqsave(&undef_lock, flags);
+	spin_lock_irqsave(&undef_lock, flags);
 	list_del(&hook->node);
-	raw_spin_unlock_irqrestore(&undef_lock, flags);
+	spin_unlock_irqrestore(&undef_lock, flags);
 }
 
 static int call_undef_hook(struct pt_regs *regs, unsigned int instr)
@@ -328,12 +328,12 @@ static int call_undef_hook(struct pt_regs *regs, unsigned int instr)
 	unsigned long flags;
 	int (*fn)(struct pt_regs *regs, unsigned int instr) = NULL;
 
-	raw_spin_lock_irqsave(&undef_lock, flags);
+	spin_lock_irqsave(&undef_lock, flags);
 	list_for_each_entry(hook, &undef_hook, node)
 		if ((instr & hook->instr_mask) == hook->instr_val &&
 		    (regs->ARM_cpsr & hook->cpsr_mask) == hook->cpsr_val)
 			fn = hook->fn;
-	raw_spin_unlock_irqrestore(&undef_lock, flags);
+	spin_unlock_irqrestore(&undef_lock, flags);
 
 	return fn ? fn(regs, instr) : 1;
 }
@@ -355,24 +355,9 @@ asmlinkage void __exception do_undefinstr(struct pt_regs *regs)
 	pc = (void __user *)instruction_pointer(regs);
 
 	if (processor_mode(regs) == SVC_MODE) {
-#ifdef CONFIG_THUMB2_KERNEL
-		if (thumb_mode(regs)) {
-			instr = ((u16 *)pc)[0];
-			if (is_wide_instruction(instr)) {
-				instr <<= 16;
-				instr |= ((u16 *)pc)[1];
-			}
-		} else
-#endif
-			instr = *(u32 *) pc;
+		instr = *(u32 *) pc;
 	} else if (thumb_mode(regs)) {
 		get_user(instr, (u16 __user *)pc);
-		if (is_wide_instruction(instr)) {
-			unsigned int instr2;
-			get_user(instr2, (u16 __user *)pc+1);
-			instr <<= 16;
-			instr |= instr2;
-		}
 	} else {
 		get_user(instr, (u32 __user *)pc);
 	}

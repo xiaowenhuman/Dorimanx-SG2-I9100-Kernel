@@ -31,7 +31,6 @@
 #include <linux/memblock.h>
 
 #include <asm/unified.h>
-#include <asm/cp15.h>
 #include <asm/cpu.h>
 #include <asm/cputype.h>
 #include <asm/elf.h>
@@ -50,9 +49,6 @@
 #include <asm/mach/time.h>
 #include <asm/traps.h>
 #include <asm/unwind.h>
-#ifdef CONFIG_MIDAS_COMMON
-#include <plat/cpu.h>
-#endif
 
 #if defined(CONFIG_DEPRECATED_PARAM_STRUCT)
 #include "compat.h"
@@ -79,9 +75,6 @@ __setup("fpe=", fpe_setup);
 extern void paging_init(struct machine_desc *desc);
 extern void sanity_check_meminfo(void);
 extern void reboot_setup(char *str);
-#ifdef CONFIG_DMA_CMA
-extern void setup_dma_zone(struct machine_desc *desc);
-#endif
 
 unsigned int processor_id;
 EXPORT_SYMBOL(processor_id);
@@ -287,19 +280,18 @@ static void __init cacheid_init(void)
 	if (arch >= CPU_ARCH_ARMv6) {
 		if ((cachetype & (7 << 29)) == 4 << 29) {
 			/* ARMv7 register format */
-			arch = CPU_ARCH_ARMv7;
 			cacheid = CACHEID_VIPT_NONALIASING;
 			if ((cachetype & (3 << 14)) == 1 << 14)
 				cacheid |= CACHEID_ASID_TAGGED;
+			else if (cpu_has_aliasing_icache(CPU_ARCH_ARMv7))
+				cacheid |= CACHEID_VIPT_I_ALIASING;
+		} else if (cachetype & (1 << 23)) {
+			cacheid = CACHEID_VIPT_ALIASING;
 		} else {
-			arch = CPU_ARCH_ARMv6;
-			if (cachetype & (1 << 23))
-				cacheid = CACHEID_VIPT_ALIASING;
-			else
-				cacheid = CACHEID_VIPT_NONALIASING;
+			cacheid = CACHEID_VIPT_NONALIASING;
+			if (cpu_has_aliasing_icache(CPU_ARCH_ARMv6))
+				cacheid |= CACHEID_VIPT_I_ALIASING;
 		}
-		if (cpu_has_aliasing_icache(arch))
-			cacheid |= CACHEID_VIPT_I_ALIASING;
 	} else {
 		cacheid = CACHEID_VIVT;
 	}
@@ -349,20 +341,6 @@ static void __init feat_v6_fixup(void)
 	 */
 	if ((((id >> 4) & 0xfff) == 0xb36) && (((id >> 20) & 3) == 0))
 		elf_hwcap &= ~HWCAP_TLS;
-}
-
-int __cpu_logical_map[NR_CPUS];
-
-void __init smp_setup_processor_id(void)
-{
-        int i;
-        u32 cpu = is_smp() ? read_cpuid_mpidr() & 0xff : 0;
-
-        cpu_logical_map(0) = cpu;
-        for (i = 1; i < NR_CPUS; ++i)
-                cpu_logical_map(i) = i == cpu ? 0 : i;
-
-        printk(KERN_INFO "Booting Linux on physical CPU %d\n", cpu);
 }
 
 static void __init setup_processor(void)
@@ -909,9 +887,6 @@ void __init setup_arch(char **cmdline_p)
 	machine_desc = mdesc;
 	machine_name = mdesc->name;
 
-#ifdef CONFIG_DMA_CMA
-	setup_dma_zone(mdesc);
-#endif
 	if (mdesc->soft_reboot)
 		reboot_setup("s");
 
@@ -943,12 +918,6 @@ void __init setup_arch(char **cmdline_p)
 	cpu_init();
 	tcm_init();
 
-#ifdef CONFIG_ZONE_DMA
-	if (mdesc->dma_zone_size) {
-		extern unsigned long arm_dma_zone_size;
-		arm_dma_zone_size = mdesc->dma_zone_size;
-	}
-#endif
 #ifdef CONFIG_MULTI_IRQ_HANDLER
 	handle_arch_irq = mdesc->handle_irq;
 #endif
@@ -1072,10 +1041,6 @@ static int c_show(struct seq_file *m, void *v)
 
 	seq_puts(m, "\n");
 
-#ifdef CONFIG_MIDAS_COMMON
-	if (soc_is_exynos4412())
-		seq_printf(m, "Chip revision\t: %04x\n", samsung_rev());
-#endif
 	seq_printf(m, "Hardware\t: %s\n", machine_name);
 	seq_printf(m, "Revision\t: %04x\n", system_rev);
 	seq_printf(m, "Serial\t\t: %08x%08x\n",

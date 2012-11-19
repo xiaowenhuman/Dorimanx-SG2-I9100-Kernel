@@ -19,8 +19,6 @@
 #include <linux/syscore_ops.h>
 #include <linux/io.h>
 #include <linux/regulator/machine.h>
-#include <linux/err.h>
-#include <linux/clk.h>
 
 #if defined(CONFIG_MACH_M0_CTC)
 #include <linux/mfd/max77693.h>
@@ -33,7 +31,6 @@
 
 #include <plat/cpu.h>
 #include <plat/pm.h>
-#include <plat/pll.h>
 #include <plat/regs-srom.h>
 
 #include <mach/regs-irq.h>
@@ -353,6 +350,10 @@ static int exynos4_pm_prepare(void)
 	ret = regulator_suspend_prepare(PM_SUSPEND_MEM);
 #endif
 
+#ifdef CONFIG_CACHE_L2X0
+	/* Disable the full line of zero */
+	disable_cache_foz();
+#endif
 	return ret;
 }
 
@@ -379,32 +380,13 @@ static void exynos4_cpu_prepare(void)
 
 	/* Before enter central sequence mode, clock src register have to set */
 
-#ifdef CONFIG_CACHE_L2X0
-	/* Disable the full line of zero */
-	disable_cache_foz();
-#endif
-
 	s3c_pm_do_restore_core(exynos4_set_clksrc, ARRAY_SIZE(exynos4_set_clksrc));
 
 	if (soc_is_exynos4210())
 		s3c_pm_do_restore_core(exynos4210_set_clksrc, ARRAY_SIZE(exynos4210_set_clksrc));
 }
 
-static unsigned int exynos4_pm_check_eint_pend(void)
-{
-	int i;
-	u32 wakeup_int_pend, pending_eint = 0;
-
-	for (i = 0; i < 4; i++) {
-		wakeup_int_pend =
-			(__raw_readl(S5P_EINT_PEND(i)) & 0xff) << (i * 8);
-		pending_eint |= wakeup_int_pend & ~s3c_irqwake_eintmask;
-	}
-
-	return pending_eint;
-}
-
-static int exynos4_pm_add(struct device *dev, struct subsys_interface *sif)
+static int exynos4_pm_add(struct sys_device *sysdev)
 {
 	pm_cpu_prep = exynos4_cpu_prepare;
 	pm_cpu_sleep = exynos4_cpu_suspend;
@@ -414,16 +396,11 @@ static int exynos4_pm_add(struct device *dev, struct subsys_interface *sif)
 	pm_finish = exynos4_pm_finish;
 #endif
 
-	if (soc_is_exynos4210())
-		pm_check_eint_pend = exynos4_pm_check_eint_pend;
-
 	return 0;
 }
 
-static struct subsys_interface exynos4_pm_interface = {
-	.name		= "exynos4_pm",
-	.subsys		= &exynos4_subsys,
-	.add_dev	= exynos4_pm_add,
+static struct sysdev_driver exynos4_pm_driver = {
+	.add		= exynos4_pm_add,
 };
 
 static __init int exynos4_pm_drvinit(void)
@@ -441,7 +418,7 @@ static __init int exynos4_pm_drvinit(void)
 	/* Disable XXTI pad in system level normal mode */
 	__raw_writel(0x0, S5P_XXTI_CONFIGURATION);
 
-	return subsys_interface_register(&exynos4_pm_interface);
+	return sysdev_driver_register(&exynos4_sysclass, &exynos4_pm_driver);
 }
 arch_initcall(exynos4_pm_drvinit);
 
@@ -565,10 +542,10 @@ static void exynos4_pm_resume(void)
 	CHECK_POINT;
 
 	if ((__raw_readl(S5P_WAKEUP_STAT) == 0) && soc_is_exynos4412()) {
-		__raw_writel(__raw_readl(S5P_EINT_PEND(0)), S5P_EINT_PEND(0));
-		__raw_writel(__raw_readl(S5P_EINT_PEND(1)), S5P_EINT_PEND(1));
-		__raw_writel(__raw_readl(S5P_EINT_PEND(2)), S5P_EINT_PEND(2));
-		__raw_writel(__raw_readl(S5P_EINT_PEND(3)), S5P_EINT_PEND(3));
+		__raw_writel(0, S5P_EINT_PEND(0));
+		__raw_writel(0, S5P_EINT_PEND(1));
+		__raw_writel(0, S5P_EINT_PEND(2));
+		__raw_writel(0, S5P_EINT_PEND(3));
 		__raw_writel(0x01010001, S5P_ARM_CORE_OPTION(0));
 		__raw_writel(0x00000001, S5P_ARM_CORE_OPTION(1));
 		__raw_writel(0x00000001, S5P_ARM_CORE_OPTION(2));
